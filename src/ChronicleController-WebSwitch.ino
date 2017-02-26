@@ -1,49 +1,13 @@
 #include "config.h"
 
-void button_onPress(Button* button);
-void button_onRelease(Button* button);
-void button_onClick(Button* button);
-void button_onLongClick(Button* button);
-float readThermF(byte pin);
-
-DS18B20 ds18b20 = DS18B20(D1);
-Adafruit_SSD1306 display;
 Adafruit_MCP23017 mcp;
+byte achState = LOW;
+Adafruit_SSD1306 display(OLED_RESET);
+OneWire own(OWNPIN);
+char lcdLineBuf[LCDLINELENGTH];
 
-typedef struct WebPowerSwitch
-{
-    IPAddress ip;
-    String Auth;
-    int port;
-} WebPowerSwitch;
-
-typedef struct Thermistor
-{
-    byte pin;
-    double lastReading;
-    unsigned long lastReadingTime;
-    int seriesResistor;
-    int norminalResistance;   // resistance at nominal temperature
-    byte nominalTemperature;  // temp. for nominal resistance (almost always 25 C)
-    int tempCoefficient; // The beta coefficient of the thermistor (usually 3000-4000)
-    byte sampleCount;    // how many samples to take and average, more takes longer
-    byte sampleDelay;
-} Thermistor;
-
-typedef enum RelayType {GPIO,MCP,WEB} RelayType;
-
-typedef struct Relay
-{
-    byte pin;               // pin number for GPIO,MCP, Outlet Number for Web
-    RelayType type;
-    Adafruit_MCP23017* mcp;
-    WebPowerSwitch* web;
-    bool state;
-    unsigned long lastTime;
-
-    int minOnTime;
-    int minOffTime;
-};
+unsigned long previousMillis = 0;
+const long tempInterval = 1000;
 
 Button buttons[BUTTON_COUNT] = {
     { "Left", 13, &mcp },
@@ -54,45 +18,19 @@ Button buttons[BUTTON_COUNT] = {
     { "Off", 2, &mcp }
 };
 
-typedef struct Chronicle
-{
-    char name[10];
-
-    Thermistor therm;
-    double targetTemp;
-
-    Relay cool;
-    Relay warm;
-
-    bool enableAuto;
-    byte autoThesholdHigh;
-    byte autoThesholdLow;
-} Chronicle;
-
 // if chronicle.therm.getReading() > targetTemp - autoThesholdHigh : chronicle.cool.on();
 // if chronicle.therm.getReading() > targetTemp - autoThesholdLow : chronicle.warm.on();
 
-typedef struct TempSource
-{
-    char name[10];
-
-    Thermistor temp;
-    double targetTemp;
-
-    Relay relay;
-
-    bool enableAuto;
-    byte autoThesholdHigh;
-    byte autoThesholdLow;
-} TempSource;
-
 void setup() {
     Serial.begin(9600);
+
+    mcp.begin();
+    mcp.pinMode(ACHPIN, OUTPUT);
+    pinMode(ACTPIN, INPUT);
+
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the diy display)
 
-    // Show image buffer on the display hardware.
-    // Since the buffer is intialized with an Adafruit splashscreen
-    // internally, this will display the splashscreen.
+    // Show the Adafruit splashscreen
     display.display();
     delay(500);
 
@@ -100,12 +38,11 @@ void setup() {
     display.clearDisplay();
 
     // text display tests
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
+    display.setTextSize(2);
+    display.setTextColor(WHITE, 0);
     display.setCursor(0,0);
-    display.println("Ready v6");
+    display.print("Ready v7");
     display.display();
-    //display.setTextSize(2);
     // text size 2: 4x10
     //             1234567890
     //display.print("  AP Cu Ta");
@@ -119,75 +56,40 @@ void setup() {
     //display.print("Chiller     Y Y 65 40");
     //display.print("Ambient      65 50%  ");
 
-    mcp.begin();
+/*
+    Ready v7
+    %2.1f ON
+
+*/
     setup_buttons(buttons);
-
-    //float therm = readThermF(THERM_COLD_PIN);
-    float therm = 0;
-
-    char msg[11];
-    snprintf(msg, 11, "1 NN %2.f 60", therm);
-    display.print(msg);
-    display.display();
 }
-
-int lastPrint = 0;
-int printDelay = 2000;
-int mcpPin = 0;
 
 void loop()
 {
-    int gpioVal;
-
+    unsigned long now = millis();
     check_buttons(buttons);
 
-    debug("DS Temp: %2.2f", getDSTemp());
-    delay(2000);
-}
+    if ( now - previousMillis >= tempInterval )
+    {
+        previousMillis = now;
+        float therm = readTempC(ACTPIN);
+        therm = convertTempCtoF(therm);
 
-void button_onPress(Button* button)
-{
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.print("Press ");
-    display.println(button->name);
-    display.display();
-}
-
-void button_onRelease(Button* button)
-{
-    display.print("Release ");
-    display.println(button->name);
-    display.display();
-}
-
-void button_onLongClick(Button* button)
-{
-    display.print("Long Click ");
-    display.println(button->name);
-    display.display();
-}
-
-void button_onClick(Button* button)
-{
-    display.print("Click");
-    display.println(button->name);
-    display.display();
-
-    //float therm = readThermF(THERM_COLD_PIN);
-    float therm = 0;
-    display.print("Cur: ");
-    display.println(therm);
-    display.display();
+        display.setCursor(0, LCDLINEHEIGHT * 1);
+        memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+        snprintf(lcdLineBuf, LCDLINELENGTH, "%2.1f %d  ", therm, achState);
+        display.print(lcdLineBuf);
+        display.display();
+    }
 }
 
 #define TEMPSAMPLES 10
 #define SERIESRESISTOR 10000
-#define THERMISTORNOMINAL 1000
-#define TEMPERATURENOMINAL 1000
-#define TEMPCOEFFICIENT 1000
+#define THERMISTORNOMINAL 10000
+#define TEMPERATURENOMINAL 25
+#define TEMPCOEFFICIENT 3950
 
-float readThermF(byte pin)
+float readTempC(byte pin)
 {
     byte i;
     float average = 0;
@@ -218,37 +120,149 @@ float readThermF(byte pin)
     steinhart += 1.0 / (TEMPERATURENOMINAL + 273.15); // + (1/To)
     steinhart = 1.0 / steinhart;                 // Invert
     steinhart -= 273.15;                         // convert to C
-    float steinhartf = (steinhart * 9.0)/ 5.0 + 32.0;
 
     #ifdef THERM_DEBUG
-        debug("Temperature %f *C (%f *F)", steinhart, steinhartf);
+        debug("Temperature %f *C", steinhart, steinhartf);
     #endif
 
-    return steinhartf;
+    return steinhart;
 }
 
-float getDSTemp(){
-    float celsius = -99;
-    float fahrenheit = -99;
-    int dsAttempts = 0;
-    if(!ds18b20.search()){
-      ds18b20.resetsearch();
-      celsius = ds18b20.getTemperature();
-      debug(" celsius: %2.2f", celsius);
-      while (!ds18b20.crcCheck() && dsAttempts < 4){
-        debug(" Caught bad value.");
-        dsAttempts++;
-        debug(" Attempts to Read: %d", dsAttempts);
-        if (dsAttempts == 3){
-          delay(1000);
-        }
-        ds18b20.resetsearch();
-        celsius = ds18b20.getTemperature();
-        continue;
-      }
-      dsAttempts = 0;
-      fahrenheit = ds18b20.convertToFahrenheit(celsius);
-      debug(" fahrenheit: %2.2f", fahrenheit);
+float readTempC(uint8_t addr[8])
+{
+    byte i;
+    uint8_t data[12];
+    float celsius;
+    unsigned int raw;
+
+    own.reset();
+    own.select(addr);
+    own.write(0xBE);
+
+    for ( i = 0 ; i < 9 ; i ++ )
+    {
+        data[i] = own.read();
     }
-    return fahrenheit;
+
+    uint8_t crc = OneWire::crc8(data, 8);
+    if ( crc != data[8] ) {
+        debug(" invalid crc: %d != %d", crc, data[8]);
+        return -123;
+    }
+
+    raw = (data[1] << 8) | data[0];
+
+    celsius = (float)raw / 16.0;
+
+    return celsius;
+}
+
+float convertTempCtoF(float tempC)
+{
+    return tempC * 1.8 + 32.0;
+}
+
+
+#include "config.h"
+
+void button_onPress(Button* button)
+{
+    display.setCursor(0, LCDLINEHEIGHT * 2);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
+    display.print(lcdLineBuf);
+    display.display();
+    display.setCursor(0, LCDLINEHEIGHT * 2);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, "Press %s", button->name);
+    display.print(lcdLineBuf);
+    display.display();
+}
+
+void button_onRelease(Button* button)
+{
+    display.setCursor(0, LCDLINEHEIGHT * 3);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
+    display.print(lcdLineBuf);
+    display.display();
+    display.setCursor(0, LCDLINEHEIGHT * 3);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, "Rel %s", button->name);
+    display.print(lcdLineBuf);
+    display.display();
+}
+
+void button_onLongClick(Button* button)
+{
+    display.setCursor(0, LCDLINEHEIGHT * 3);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
+    display.print(lcdLineBuf);
+    display.display();
+    display.setCursor(0, LCDLINEHEIGHT * 3);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, "Long %s", button->name);
+    display.print(lcdLineBuf);
+    display.display();
+}
+
+void button_onClick(Button* button)
+{
+    display.setCursor(0, LCDLINEHEIGHT * 3);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
+    display.print(lcdLineBuf);
+    display.display();
+    display.setCursor(0, LCDLINEHEIGHT * 3);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, "Click %s", button->name);
+    display.print(lcdLineBuf);
+    display.display();
+
+    if ( strcmp("Sel", button->name) == 0 )
+    {
+        debug("'Sel' was clicked.");
+        if ( achState == HIGH )
+        {
+            achState = LOW;
+        }
+        else
+        {
+            achState = HIGH;
+        }
+        mcp.digitalWrite(ACHPIN, achState);
+    }
+}
+
+void debug(String message) {
+    char msg [50];
+    sprintf(msg, message.c_str());
+    //Particle.publish("chronicle-debug", msg);
+    Serial.println(message);
+}
+void debug(String message, int value) {
+    char msg [50];
+    sprintf(msg, message.c_str(), value);
+    debug(msg);
+}
+void debug(String message, float value) {
+    char msg [50];
+    sprintf(msg, message.c_str(), value);
+    debug(msg);
+}
+void debug(String message, float value, float value2) {
+    char msg [50];
+    sprintf(msg, message.c_str(), value, value2);
+    debug(msg);
+}
+void debug(String message, int value, int value2) {
+    char msg [50];
+    sprintf(msg, message.c_str(), value, value2);
+    debug(msg);
+}
+void debug(String message, char *value) {
+    char msg [50];
+    sprintf(msg, message.c_str(), value);
+    debug(msg);
 }

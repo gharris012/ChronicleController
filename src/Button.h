@@ -1,11 +1,10 @@
 #ifndef button_h
 #define button_h
 
-#define BUTTON_COUNT  6
 #define BUTTON_DEBOUNCE_DELAY 10
 #define BUTTON_LONGPRESS_THRESHOLD 300
 
-#include "config.h"
+#include "Adafruit_MCP23017.h"
 
 typedef struct Button
 {
