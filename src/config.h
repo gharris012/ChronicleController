@@ -11,7 +11,7 @@
 
 // A/C Thermostat Heater pin
 #define ACTPIN A2
-#define ACHPIN 11 // on MCP
+#define ACHPIN 12 // on MCP
 #define OWNPIN D6
 #define LCDLINELENGTH 10
 #define LCDLINEHEIGHT 16
@@ -27,6 +27,7 @@ void debug(String message, float value);
 void debug(String message, float value, float value2);
 void debug(String message, int value, int value2);
 void debug(String message, char *value);
+void debug(String message, char *value, float value2);
 
 float readTempC(byte pin); // analog thermistor
 float readTempC(uint8_t addr[8]);

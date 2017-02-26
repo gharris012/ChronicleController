@@ -6,8 +6,25 @@ Adafruit_SSD1306 display(OLED_RESET);
 OneWire own(OWNPIN);
 char lcdLineBuf[LCDLINELENGTH];
 
-unsigned long previousMillis = 0;
+unsigned long previousTempMillis = 0;
+unsigned long previousOwnMillis = 0;
 const long tempInterval = 1000;
+const long ownInterval = 3500;
+
+const byte DSCOUNT = 6;
+
+uint8_t dsAddrs[DSCOUNT][8] = {
+    {0x28, 0x37, 0xD3, 0x60, 0x4, 0x0, 0x0, 0xC9},
+    {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
+    {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
+    {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
+    {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
+    {0x28, 0xFF, 0x26, 0x5A, 0x71, 0x16, 0x4, 0x8C}
+};
+
+bool addrPresent[DSCOUNT] = {
+    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE
+};
 
 Button buttons[BUTTON_COUNT] = {
     { "Left", 13, &mcp },
@@ -26,6 +43,7 @@ void setup() {
 
     mcp.begin();
     mcp.pinMode(ACHPIN, OUTPUT);
+    mcp.digitalWrite(ACHPIN, LOW);
     pinMode(ACTPIN, INPUT);
 
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the diy display)
@@ -34,6 +52,7 @@ void setup() {
     display.display();
     delay(500);
 
+    debug("Setting up display");
     // Clear the buffer.
     display.clearDisplay();
 
@@ -61,18 +80,41 @@ void setup() {
     %2.1f ON
 
 */
+
+    debug("Setting up buttons");
+
     setup_buttons(buttons);
+    delay(500);
+
+    debug("Setting up OWN");
+    scanOWN();
+    delay(500);
+    // set resolution for all ds temp sensors
+    own.reset();
+    own.skip();
+    own.write(0x4E);         // Write scratchpad
+    own.write(0);            // TL
+    own.write(0);            // TH
+    own.write(0x3F);         // 10-bit resolution
+    own.write(0x48);         // Copy Scratchpad
+    own.write(0x44);         // start conversion
+    own.reset();
+
+    delay(500);
 }
 
 void loop()
 {
+    uint8_t *addr;
+    char buf[10];
+    float therm;
     unsigned long now = millis();
     check_buttons(buttons);
 
-    if ( now - previousMillis >= tempInterval )
+    if ( now - previousTempMillis >= tempInterval )
     {
-        previousMillis = now;
-        float therm = readTempC(ACTPIN);
+        previousTempMillis = now;
+        therm = readTempC(ACTPIN);
         therm = convertTempCtoF(therm);
 
         display.setCursor(0, LCDLINEHEIGHT * 1);
@@ -80,7 +122,77 @@ void loop()
         snprintf(lcdLineBuf, LCDLINELENGTH, "%2.1f %d  ", therm, achState);
         display.print(lcdLineBuf);
         display.display();
+
+        own.reset();
+        own.skip();
+        own.write(0x44);
+        own.reset();
     }
+    if ( now - previousOwnMillis >= ownInterval )
+    {
+        previousOwnMillis = now;
+
+        own.reset();
+        for ( byte i = 0 ; i < DSCOUNT ; i ++ )
+        {
+            if ( addrPresent[i] )
+            {
+                addr = dsAddrs[i];
+                sprintf(buf, "%02X-%02X", addr[6], addr[7]);
+
+                own.reset();
+                own.select(addr);
+                if ( own.read() )
+                {
+                    therm = readTempC(addr);
+                    if ( therm > -123 ) // invalid crc, skip
+                    {
+                        therm = convertTempCtoF(therm);
+                        debug(" %s -> %2.2f", buf, therm);
+                    }
+                }
+                else
+                {
+                    debug(" %s -> not ready yet :(", buf);
+                }
+            }
+        }
+    }
+}
+
+void scanOWN()
+{
+    uint8_t addr[8];
+    char buf[30];
+
+    debug("Searching OWN");
+    if ( own.reset() == 1 )
+    {
+        debug("Network present");
+    }
+    else
+    {
+        debug("Network problem :(");
+    }
+
+    own.reset_search();
+    // search own for sensors
+    while(own.search(addr))
+    {
+        sprintf(buf, "%02X-%02X-%02X-%02X-%02X-%02X-%02X-%02X", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], addr[6], addr[7]);
+        debug("Found: %s", buf);
+        for ( byte i = 0 ; i < DSCOUNT ; i ++ )
+        {
+            uint8_t addrCmp = memcmp(addr, dsAddrs[i], 8);
+            debug(" addrCmp: %d", addrCmp);
+            if ( addrCmp == 0 )
+            {
+                debug(" at index %d", i);
+                addrPresent[i] = TRUE;
+            }
+        }
+    }
+    own.reset_search();
 }
 
 #define TEMPSAMPLES 10
@@ -233,6 +345,11 @@ void button_onClick(Button* button)
         }
         mcp.digitalWrite(ACHPIN, achState);
     }
+    else if ( strcmp("Off", button->name) == 0 )
+    {
+        debug("'Off' was clicked.");
+        scanOWN();
+    }
 }
 
 void debug(String message) {
@@ -264,5 +381,10 @@ void debug(String message, int value, int value2) {
 void debug(String message, char *value) {
     char msg [50];
     sprintf(msg, message.c_str(), value);
+    debug(msg);
+}
+void debug(String message, char *value, float value2) {
+    char msg [50];
+    sprintf(msg, message.c_str(), value, value2);
     debug(msg);
 }
