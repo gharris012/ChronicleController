@@ -21,6 +21,24 @@
 // we don't actually have an OLED reset pin, but the constructor needs it
 #define OLED_RESET D4
 
+typedef struct DSTempSensor
+{
+    char name[10];
+    uint8_t addr[8];
+
+    float tempF;
+
+    bool present;
+} DSTempSensor;
+
+typedef struct Thermistor
+{
+    char name[10];
+    byte pin;
+
+    float tempF;
+} Thermistor;
+
 void debug(String message);
 void debug(String message, int value);
 void debug(String message, float value);
@@ -28,9 +46,11 @@ void debug(String message, float value, float value2);
 void debug(String message, int value, int value2);
 void debug(String message, char *value);
 void debug(String message, char *value, float value2);
+void debug(String message, char *value, int value2);
 
 float readTempC(byte pin); // analog thermistor
-float readTempC(uint8_t addr[8]);
+float readTempC(DSTempSensor *dstemp);
 float convertTempCtoF(float tempC);
+void displayLine(byte line, char *message, bool clear);
 
 #endif

@@ -4,26 +4,46 @@ Adafruit_MCP23017 mcp;
 byte achState = LOW;
 Adafruit_SSD1306 display(OLED_RESET);
 OneWire own(OWNPIN);
-char lcdLineBuf[LCDLINELENGTH];
 
-unsigned long previousTempMillis = 0;
-unsigned long previousOwnMillis = 0;
-const long tempInterval = 1000;
-const long ownInterval = 3500;
+char buf[10];
 
-const byte DSCOUNT = 6;
+unsigned long lastTemperatureTime = 0;
+const long temperatureInterval = 5000;
+const int dsTempConvertTime = 250;
+bool dsTempIsConverting = FALSE;
 
-uint8_t dsAddrs[DSCOUNT][8] = {
-    {0x28, 0x37, 0xD3, 0x60, 0x4, 0x0, 0x0, 0xC9},
-    {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
-    {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
-    {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
-    {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
-    {0x28, 0xFF, 0x26, 0x5A, 0x71, 0x16, 0x4, 0x8C}
+const byte DSCOUNT = 5;
+DSTempSensor dsTemp[DSCOUNT] = {
+    {
+        "04-73",
+        {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
+        0, FALSE
+    },
+    {
+        "05-9E",
+        {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
+        0, FALSE
+    },
+    {
+        "05-AD",
+        {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
+        0, FALSE
+    },
+    {
+        "05-C9",
+        {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
+        0, FALSE
+    },
+    {
+        "04-8C",
+        {0x28, 0xFF, 0x26, 0x5A, 0x71, 0x16, 0x4, 0x8C},
+        0, FALSE
+    }
 };
 
-bool addrPresent[DSCOUNT] = {
-    FALSE, FALSE, FALSE, FALSE, FALSE, FALSE
+const byte THERMISTORCOUNT = 1;
+Thermistor thermistors[THERMISTORCOUNT] = {
+    { "A/C TStat", A2, 0 }
 };
 
 Button buttons[BUTTON_COUNT] = {
@@ -60,7 +80,7 @@ void setup() {
     display.setTextSize(2);
     display.setTextColor(WHITE, 0);
     display.setCursor(0,0);
-    display.print("Ready v7");
+    display.print("Ready v8");
     display.display();
     // text size 2: 4x10
     //             1234567890
@@ -105,46 +125,54 @@ void setup() {
 
 void loop()
 {
-    uint8_t *addr;
-    char buf[10];
     float therm;
+    byte i = 0;
     unsigned long now = millis();
     check_buttons(buttons);
 
-    if ( now - previousTempMillis >= tempInterval )
+    if ( now - lastTemperatureTime >= temperatureInterval )
     {
-        previousTempMillis = now;
-        therm = readTempC(ACTPIN);
-        therm = convertTempCtoF(therm);
+        lastTemperatureTime = now;
 
-        display.setCursor(0, LCDLINEHEIGHT * 1);
-        memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-        snprintf(lcdLineBuf, LCDLINELENGTH, "%2.1f %d  ", therm, achState);
-        display.print(lcdLineBuf);
-        display.display();
-
+        debug("Refreshing temperatures");
         own.reset();
         own.skip();
         own.write(0x44);
         own.reset();
+        dsTempIsConverting = TRUE;
+
+        debug("Reading thermistor temperatures");
+        for ( i = 0 ; i < THERMISTORCOUNT ; i ++ )
+        {
+            therm = readTempC(&thermistors[i]);
+            therm = convertTempCtoF(therm);
+            thermistors[i].tempF = therm;
+
+            debug(" %s -> %2.2f", thermistors[i].name, therm);
+        }
+        memset(buf, 0, sizeof(buf));
+        snprintf(buf, sizeof(buf), "%2.1f %d   ", thermistors[0].tempF, achState);
+        displayLine(1, buf, FALSE);
     }
-    if ( now - previousOwnMillis >= ownInterval )
+    now = millis();
+    if ( ( now - lastTemperatureTime >= dsTempConvertTime ) && dsTempIsConverting )
     {
-        previousOwnMillis = now;
+        dsTempIsConverting = FALSE;
+        debug("Reading ds temperatures");
 
         own.reset();
-        for ( byte i = 0 ; i < DSCOUNT ; i ++ )
+        for ( i = 0 ; i < DSCOUNT ; i ++ )
         {
-            if ( addrPresent[i] )
+            if ( dsTemp[i].present )
             {
-                addr = dsAddrs[i];
-                sprintf(buf, "%02X-%02X", addr[6], addr[7]);
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, "%02X-%02X", dsTemp[i].addr[6], dsTemp[i].addr[7]);
 
                 own.reset();
-                own.select(addr);
+                own.select(dsTemp[i].addr);
                 if ( own.read() )
                 {
-                    therm = readTempC(addr);
+                    therm = readTempC(&dsTemp[i]);
                     if ( therm > -123 ) // invalid crc, skip
                     {
                         therm = convertTempCtoF(therm);
@@ -160,10 +188,26 @@ void loop()
     }
 }
 
+void resetOWN()
+{
+    byte i = 0;
+    for ( i = 0 ; i < DSCOUNT ; i ++ )
+    {
+        dsTemp[i].tempF = 0;
+        dsTemp[i].present = FALSE;
+    }
+}
+
 void scanOWN()
 {
     uint8_t addr[8];
     char buf[30];
+    byte i = 0;
+
+    for ( i = 0 ; i < DSCOUNT ; i ++ )
+    {
+        dsTemp[i].present = FALSE;
+    }
 
     debug("Searching OWN");
     if ( own.reset() == 1 )
@@ -181,18 +225,37 @@ void scanOWN()
     {
         sprintf(buf, "%02X-%02X-%02X-%02X-%02X-%02X-%02X-%02X", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], addr[6], addr[7]);
         debug("Found: %s", buf);
-        for ( byte i = 0 ; i < DSCOUNT ; i ++ )
+        for ( i = 0 ; i < DSCOUNT ; i ++ )
         {
-            uint8_t addrCmp = memcmp(addr, dsAddrs[i], 8);
-            debug(" addrCmp: %d", addrCmp);
+            uint8_t addrCmp = memcmp(addr, dsTemp[i].addr, 8);
             if ( addrCmp == 0 )
             {
-                debug(" at index %d", i);
-                addrPresent[i] = TRUE;
+                debug(" %s at index %d", dsTemp[i].name, i);
+                dsTemp[i].present = TRUE;
             }
         }
     }
     own.reset_search();
+}
+
+void displayLine(byte line, char *message, bool clear)
+{
+    char lcdLineBuf[LCDLINELENGTH];
+
+    if ( clear )
+    {
+        display.setCursor(0, LCDLINEHEIGHT * line);
+        memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+        snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
+        display.print(lcdLineBuf);
+        display.display();
+    }
+
+    display.setCursor(0, LCDLINEHEIGHT * line);
+    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
+    snprintf(lcdLineBuf, LCDLINELENGTH, message);
+    display.print(lcdLineBuf);
+    display.display();
 }
 
 #define TEMPSAMPLES 10
@@ -201,7 +264,7 @@ void scanOWN()
 #define TEMPERATURENOMINAL 25
 #define TEMPCOEFFICIENT 3950
 
-float readTempC(byte pin)
+float readTempC(Thermistor *thermistor)
 {
     byte i;
     float average = 0;
@@ -209,7 +272,7 @@ float readTempC(byte pin)
     // take N samples in a row, with a slight delay
     for ( i = 0 ; i < TEMPSAMPLES ; i++ )
     {
-        average += analogRead(pin);
+        average += analogRead(thermistor->pin);
         delay(10);
     }
     average /= TEMPSAMPLES;
@@ -240,7 +303,7 @@ float readTempC(byte pin)
     return steinhart;
 }
 
-float readTempC(uint8_t addr[8])
+float readTempC(DSTempSensor *dstemp)
 {
     byte i;
     uint8_t data[12];
@@ -248,7 +311,7 @@ float readTempC(uint8_t addr[8])
     unsigned int raw;
 
     own.reset();
-    own.select(addr);
+    own.select(dstemp->addr);
     own.write(0xBE);
 
     for ( i = 0 ; i < 9 ; i ++ )
@@ -279,58 +342,30 @@ float convertTempCtoF(float tempC)
 
 void button_onPress(Button* button)
 {
-    display.setCursor(0, LCDLINEHEIGHT * 2);
-    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-    snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
-    display.print(lcdLineBuf);
-    display.display();
-    display.setCursor(0, LCDLINEHEIGHT * 2);
-    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-    snprintf(lcdLineBuf, LCDLINELENGTH, "Press %s", button->name);
-    display.print(lcdLineBuf);
-    display.display();
+    memset(buf, 0, sizeof(buf));
+    snprintf(buf, sizeof(buf), "Press %s", button->name);
+    displayLine(2, buf, true);
 }
 
 void button_onRelease(Button* button)
 {
-    display.setCursor(0, LCDLINEHEIGHT * 3);
-    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-    snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
-    display.print(lcdLineBuf);
-    display.display();
-    display.setCursor(0, LCDLINEHEIGHT * 3);
-    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-    snprintf(lcdLineBuf, LCDLINELENGTH, "Rel %s", button->name);
-    display.print(lcdLineBuf);
-    display.display();
+    memset(buf, 0, sizeof(buf));
+    snprintf(buf, sizeof(buf), "Rel %s", button->name);
+    displayLine(3, buf, true);
 }
 
 void button_onLongClick(Button* button)
 {
-    display.setCursor(0, LCDLINEHEIGHT * 3);
-    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-    snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
-    display.print(lcdLineBuf);
-    display.display();
-    display.setCursor(0, LCDLINEHEIGHT * 3);
-    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-    snprintf(lcdLineBuf, LCDLINELENGTH, "Long %s", button->name);
-    display.print(lcdLineBuf);
-    display.display();
+    memset(buf, 0, sizeof(buf));
+    snprintf(buf, sizeof(buf), "Long %s", button->name);
+    displayLine(3, buf, true);
 }
 
 void button_onClick(Button* button)
 {
-    display.setCursor(0, LCDLINEHEIGHT * 3);
-    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-    snprintf(lcdLineBuf, LCDLINELENGTH, LCDBLANKLINE);
-    display.print(lcdLineBuf);
-    display.display();
-    display.setCursor(0, LCDLINEHEIGHT * 3);
-    memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
-    snprintf(lcdLineBuf, LCDLINELENGTH, "Click %s", button->name);
-    display.print(lcdLineBuf);
-    display.display();
+    memset(buf, 0, sizeof(buf));
+    snprintf(buf, sizeof(buf), "Click %s", button->name);
+    displayLine(3, buf, true);
 
     if ( strcmp("Sel", button->name) == 0 )
     {
@@ -384,6 +419,11 @@ void debug(String message, char *value) {
     debug(msg);
 }
 void debug(String message, char *value, float value2) {
+    char msg [50];
+    sprintf(msg, message.c_str(), value, value2);
+    debug(msg);
+}
+void debug(String message, char *value, int value2) {
     char msg [50];
     sprintf(msg, message.c_str(), value, value2);
     debug(msg);
