@@ -9,14 +9,19 @@
 #include "Adafruit_MCP23017.h"
 #include "OneWire.h"
 
+#define APP_VERSION "02"
+
 // A/C Thermostat Heater pin
 #define ACTPIN A2
-#define ACHPIN 12 // on MCP
+#define ACHPIN 8 // on MCP
 #define OWNPIN D6
 #define LCDLINELENGTH 10
 #define LCDLINEHEIGHT 16
 #define LCDBLANKLINE "          "
 #define BUTTON_COUNT  6
+#define MENU_ON 1
+#define MENU_OFF 2
+#define MENU_AUTO 3
 
 // we don't actually have an OLED reset pin, but the constructor needs it
 #define OLED_RESET D4
@@ -25,9 +30,9 @@ typedef struct DSTempSensor
 {
     char name[10];
     uint8_t addr[8];
+    uint8_t blynkPin;
 
     float tempF;
-
     bool present;
 } DSTempSensor;
 
@@ -35,18 +40,18 @@ typedef struct Thermistor
 {
     char name[10];
     byte pin;
+    uint8_t blynkPin;
 
     float tempF;
 } Thermistor;
 
-void debug(String message);
-void debug(String message, int value);
-void debug(String message, float value);
-void debug(String message, float value, float value2);
-void debug(String message, int value, int value2);
-void debug(String message, char *value);
-void debug(String message, char *value, float value2);
-void debug(String message, char *value, int value2);
+typedef struct Fermenter
+{
+    char name[10];
+    DSTempSensor *dstemp;
+    uint8_t targetTemp;
+    byte mode;
+};
 
 float readTempC(byte pin); // analog thermistor
 float readTempC(DSTempSensor *dstemp);

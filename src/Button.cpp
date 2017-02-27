@@ -63,7 +63,7 @@ void setup_buttons(Button *fbuttons)
 
     for ( i = 0 ; i < BUTTON_COUNT ; i ++ )
     {
-        debug("setting up %s", fbuttons[i].name);
+        Log.info("setting up %s", fbuttons[i].name);
         if ( fbuttons[i].mcp != 0 )
         {
             fbuttons[i].mcp->pinMode(fbuttons[i].pin, INPUT);
