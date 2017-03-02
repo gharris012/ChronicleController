@@ -8,8 +8,14 @@
 #include "Adafruit_SSD1306.h"
 #include "Adafruit_MCP23017.h"
 #include "OneWire.h"
+#include "pid.h"
+#include "Adafruit_MQTT_SPARK.h"
+#include "Adafruit_MQTT.h"
 
-#define APP_VERSION "02"
+#define APP_VERSION "05"
+
+#define AIO_SERVER "io.adafruit.com"
+#define AIO_SERVERPORT 1883
 
 // A/C Thermostat Heater pin
 #define ACTPIN A2
@@ -31,6 +37,7 @@ typedef struct DSTempSensor
     char name[10];
     uint8_t addr[8];
     uint8_t blynkPin;
+    Adafruit_MQTT_Publish *aioFeed;
 
     float tempF;
     bool present;
@@ -41,6 +48,7 @@ typedef struct Thermistor
     char name[10];
     byte pin;
     uint8_t blynkPin;
+    Adafruit_MQTT_Publish *aioFeed;
 
     float tempF;
 } Thermistor;

@@ -1,11 +1,16 @@
 #include "config.h"
-#define BLYNK_PRINT Serial
+#include "keys.h"
 #include "blynk.h"
+//#define BLYNK_PRINT Serial
 
 Adafruit_MCP23017 mcp;
 byte achState = LOW;
 Adafruit_SSD1306 display(OLED_RESET);
 OneWire own(OWNPIN);
+TCPClient TheClient;
+Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY);
+Adafruit_MQTT_Publish aio_photon_temp_9e = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/photon-temp-9e");
+
 SerialLogHandler logHandler(LOG_LEVEL_ALL);
 
 char buf[10];
@@ -20,22 +25,26 @@ DSTempSensor dsTemp[DSCOUNT] = {
     {
         "04-73", // Fermenter 1
         {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
-        1, 0, FALSE
+        1, NULL,
+        0, FALSE
     },
     {
         "05-9E", // Fermenter 2
         {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
-        2, 0, FALSE
+        2, &aio_photon_temp_9e,
+        0, FALSE
     },
     {
         "05-AD", // Ambient
         {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
-        9, 0, FALSE
+        9, NULL,
+        0, FALSE
     },
     {
         "05-C9", // Chiller
         {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
-        10, 0, FALSE
+        10, NULL,
+        0, FALSE
     }
 };
 
@@ -58,7 +67,7 @@ Fermenter fermenters[FERMENTERCOUNT] =
 
 const byte THERMISTORCOUNT = 1;
 Thermistor thermistors[THERMISTORCOUNT] = {
-    { "A/C TStat", A2, 4, 0 }
+    { "A/C TStat", A2, 4, 0, NULL }
 };
 
 Button buttons[BUTTON_COUNT] = {
@@ -83,14 +92,15 @@ void setup() {
     Log.info("App version: %s", (const char*)APP_VERSION);
 
     Log.info("setting up blynk");
-    Blynk.begin("8a561dda6d744712a719816b3f41e25b");
+    Blynk.begin(BLYNK_KEY);
 
     mcp.begin();
     mcp.pinMode(ACHPIN, OUTPUT);
     mcp.digitalWrite(ACHPIN, LOW);
     pinMode(ACTPIN, INPUT);
 
-    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the diy display)
+    // initialize with the I2C addr 0x3C (for the diy display)
+    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
     // Show the Adafruit splashscreen
     display.display();
@@ -168,7 +178,7 @@ void loop()
             therm = readTempC(&thermistors[i]);
             therm = convertTempCtoF(therm);
             thermistors[i].tempF = therm;
-            if ( thermistors[i].blynkPin >= 0 )
+            if ( thermistors[i].blynkPin >= 0 && therm > 0 )
             {
                 Blynk.virtualWrite(thermistors[i].blynkPin, therm);
             }
@@ -179,7 +189,8 @@ void loop()
         if ( now > temperatureInterval )
         {
             memset(buf, 0, sizeof(buf));
-            snprintf(buf, sizeof(buf), "A %2.1f %s", dsTemp[2].tempF, APP_VERSION);
+            //snprintf(buf, sizeof(buf), "A %2.1f %s", dsTemp[2].tempF, APP_VERSION);
+            snprintf(buf, sizeof(buf), "H %2.1f %s", thermistors[0].tempF, APP_VERSION);
             displayLine(0, buf, FALSE);
             memset(tbuf, 0, sizeof(tbuf));
             if ( fermenters[0].mode == 1 )
@@ -269,6 +280,10 @@ void loop()
                         if ( dsTemp[i].blynkPin >= 0 )
                         {
                             Blynk.virtualWrite(dsTemp[i].blynkPin, therm);
+                        }
+                        if ( dsTemp[i].aioFeed )
+                        {
+                            dsTemp[i].aioFeed->publish(therm);
                         }
                     }
                 }
