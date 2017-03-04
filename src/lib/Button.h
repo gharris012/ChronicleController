@@ -3,10 +3,6 @@
 
 #define BUTTON_DEBOUNCE_DELAY 10
 #define BUTTON_LONGPRESS_THRESHOLD 300
-#ifndef BUTTON_COUNT
-    #define BUTTON_COUNT 2
-#endif
-
 #include "Adafruit_MCP23017.h"
 
 typedef struct Button
@@ -25,7 +21,7 @@ void button_onPress(Button* button);
 void button_onRelease(Button* button);
 void button_onClick(Button* button);
 void button_onLongClick(Button* button);
-void check_buttons(Button *fbuttons);
-void setup_buttons(Button *fbuttons);
+void check_buttons(Button *fbuttons, uint8_t buttonCount);
+void setup_buttons(Button *fbuttons, uint8_t buttonCount);
 
 #endif

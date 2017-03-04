@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "05"
+#define APP_VERSION "6"
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883
 
@@ -12,7 +12,7 @@
 #define LCDLINELENGTH 10
 #define LCDLINEHEIGHT 16
 #define LCDBLANKLINE "          "
-#define BUTTON_COUNT  6
+#define BUTTON_COUNT 6
 #define MENU_ON 1
 #define MENU_OFF 2
 #define MENU_AUTO 3

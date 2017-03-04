@@ -8,8 +8,28 @@ byte achState = LOW;
 Adafruit_SSD1306 display;
 OneWire own(OWNPIN);
 TCPClient TheClient;
-Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY);
-Adafruit_MQTT_Publish aio_photon_temp_9e = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/photon-temp-9e");
+// Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY);
+// Adafruit_MQTT_Publish aio_pid_setpoint = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-setpoint");
+// Adafruit_MQTT_Publish aio_pid_current = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-current");
+// Adafruit_MQTT_Publish aio_pid_output = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-output");
+// Adafruit_MQTT_Publish aio_pid_error = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-error");
+// Adafruit_MQTT_Publish aio_pid_state = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-state");
+
+// pid variables
+double pid_Heater_Setpoint, pid_Heater_Input, pid_Heater_Output, pid_Heater_Error;
+const double pid_Heater_Kp = 100;
+const double pid_Heater_Ki = 0.15;
+const double pid_Heater_Kd = 1000;
+const double pid_Heater_window = 1000;
+double pid_Heater_windowStart = 0;
+const int pid_Heater_min = 0;
+const int pid_Heater_max = pid_Heater_window;
+const int pid_Heater_SampleTime = pid_Heater_window;
+bool pid_Heater_enabled = TRUE;
+unsigned long lastPidTime = 0;
+
+PID pid_Heater(&pid_Heater_Input, &pid_Heater_Output, &pid_Heater_Setpoint,
+                pid_Heater_Kp, pid_Heater_Ki, pid_Heater_Kd, PID::DIRECT);
 
 SerialLogHandler logHandler(LOG_LEVEL_ALL);
 
@@ -31,7 +51,7 @@ DSTempSensor dsTemp[DSCOUNT] = {
     {
         "05-9E", // Fermenter 2
         {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
-        2, &aio_photon_temp_9e,
+        2, NULL,
         0, FALSE
     },
     {
@@ -83,7 +103,7 @@ Button buttons[BUTTON_COUNT] = {
 // if chronicle.therm.getReading() > targetTemp - autoThesholdLow : chronicle.warm.on();
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
     delay(2000); // allow time to connect serial monitor
 
     Log.info("System started");
@@ -94,13 +114,17 @@ void setup() {
     Log.info("setting up blynk");
     Blynk.begin(BLYNK_KEY);
 
-    Log.info("connecting up AIO");
-    int8_t aio_state = mqtt.connect();
-    if ( aio_state != 0 )
-    {
-        Log.warn("Unable to connect to aio: %s", mqtt.connectErrorString(aio_state));
-    }
+    Log.info("connecting to AIO");
+    // int8_t aio_state = mqtt.connect();
+    // if ( aio_state != 0 )
+    // {
+    //     Log.warn("Unable to connect to aio: %s", mqtt.connectErrorString(aio_state));
+    // }
 
+    Log.info("setting up Heater PID");
+    pid_Heater_Setpoint = 65; // reasonable default until we get real data
+    pid_Heater.SetOutputLimits(pid_Heater_min, pid_Heater_max);
+    pid_Heater.SetMode(PID::AUTOMATIC);
 
     mcp.begin();
     mcp.pinMode(ACHPIN, OUTPUT);
@@ -136,7 +160,7 @@ void setup() {
 
     Log.info("Setting up buttons");
 
-    setup_buttons(buttons);
+    setup_buttons(buttons, BUTTON_COUNT);
     delay(500);
 
     Log.info("Setting up OWN");
@@ -160,12 +184,56 @@ void loop()
 {
     float therm;
     byte i = 0;
-    unsigned long now = millis();
     char tbuf[5];
 
     Blynk.run();
 
-    check_buttons(buttons);
+    check_buttons(buttons, BUTTON_COUNT);
+
+    unsigned long now = millis();
+
+    if ( pid_Heater_enabled )
+    {
+        if ( now - lastPidTime >= pid_Heater_SampleTime )
+        {
+            //achState = LOW;
+            lastPidTime = now;
+
+            //Log.info("Updating Heater PID");
+            pid_Heater_Input = readTempC(&thermistors[0]); // heater
+            pid_Heater_Input = convertTempCtoF(pid_Heater_Input);
+            pid_Heater.Compute();
+            pid_Heater_Error = pid_Heater_Setpoint - pid_Heater_Input;
+
+            //aio_pid_output.publish(pid_Heater_Output);
+            //aio_pid_current.publish(pid_Heater_Input);
+            //aio_pid_setpoint.publish(pid_Heater_Setpoint);
+            //aio_pid_error.publish(pid_Heater_Setpoint - pid_Heater_Input);
+
+            pid_Heater_windowStart = millis();
+
+            Log.info(" Heater PID Output: %3.2f %3.2f %3.2f %3.2f", pid_Heater_Setpoint, pid_Heater_Input, pid_Heater_Error, pid_Heater_Output);
+            //Log.trace("  window start %f -> window end %f", pid_Heater_windowStart, pid_Heater_windowStart + pid_Heater_Output);
+        }
+        if ( ( pid_Heater_windowStart + pid_Heater_Output ) > millis() )
+        {
+            if ( achState != HIGH )
+            {
+                Log.trace(" turning ON heater");
+                //aio_pid_state.publish(1);
+                achState = HIGH;
+            }
+        }
+        else
+        {
+            if ( achState != LOW )
+            {
+                Log.trace(" turning OFF heater");
+                //aio_pid_state.publish(0);
+                achState = LOW;
+            }
+        }
+    }
 
     mcp.digitalWrite(ACHPIN, achState);
 
@@ -198,8 +266,24 @@ void loop()
         {
             memset(buf, 0, sizeof(buf));
             //snprintf(buf, sizeof(buf), "A %2.1f %s", dsTemp[2].tempF, APP_VERSION);
-            snprintf(buf, sizeof(buf), "H %2.1f %s", thermistors[0].tempF, APP_VERSION);
+
+            memset(tbuf, 0, sizeof(tbuf));
+            if ( pid_Heater_enabled )
+            {
+                snprintf(tbuf, sizeof(tbuf), "%2f", pid_Heater_Setpoint);
+            }
+            else if ( achState )
+            {
+                snprintf(tbuf, sizeof(tbuf), "ON ");
+            }
+            else
+            {
+                snprintf(tbuf, sizeof(tbuf), "OFF");
+            }
+            Log.info("loop -> Heater is %s (%s)", tbuf, achState ? "ON" : "OFF");
+            snprintf(buf, sizeof(buf), "H %2.0f %s %s", thermistors[0].tempF, tbuf, APP_VERSION);
             displayLine(0, buf, FALSE);
+
             memset(tbuf, 0, sizeof(tbuf));
             if ( fermenters[0].mode == 1 )
             {
@@ -215,12 +299,13 @@ void loop()
             }
             else
             {
-                Log.info("Mode %d", fermenters[0].mode);
+                Log.warn("Unknown mode %d for %s", fermenters[0].mode, fermenters[0].name);
             }
-            Log.info("setting 0 to %s", tbuf);
+            Log.info("loop -> %s is %s", fermenters[0].name, tbuf);
             memset(buf, 0, sizeof(buf));
             snprintf(buf, sizeof(buf), "1 %2.1f %s", dsTemp[0].tempF, tbuf);
             displayLine(1, buf, FALSE);
+
             memset(tbuf, 0, sizeof(tbuf));
             if ( fermenters[1].mode == 1 )
             {
@@ -258,7 +343,18 @@ void loop()
             displayLine(3, buf, FALSE);
         }
 
-        Blynk.virtualWrite(3, achState);
+        if ( pid_Heater_enabled )
+        {
+            Blynk.virtualWrite(3, MENU_AUTO);
+        }
+        else if ( achState )
+        {
+            Blynk.virtualWrite(3, MENU_ON);
+        }
+        else
+        {
+            Blynk.virtualWrite(3, MENU_OFF);
+        }
     }
     now = millis();
     if ( ( now - lastTemperatureTime >= dsTempConvertTime ) && dsTempIsConverting )
@@ -291,8 +387,15 @@ void loop()
                         }
                         if ( dsTemp[i].aioFeed )
                         {
-                            Log.info(" updating aio feed");
-                            dsTemp[i].aioFeed->publish(therm);
+                            // if ( mqtt.connected() )
+                            // {
+                            //     Log.info(" updating aio feed");
+                            //     dsTemp[i].aioFeed->publish(therm);
+                            // }
+                            // else
+                            // {
+                            //     Log.warn(" mqtt disconnected");
+                            // }
                         }
                     }
                 }
@@ -438,13 +541,16 @@ float readTempC(DSTempSensor *dstemp)
 
     uint8_t crc = OneWire::crc8(data, 8);
     if ( crc != data[8] ) {
-        Log.info(" invalid crc: %d != %d", crc, data[8]);
+        Log.warn(" invalid crc: %d != %d", crc, data[8]);
         return -123;
     }
 
     raw = (data[1] << 8) | data[0];
+    //Log.trace(" %s => data[0]: %d ; data[1]: %d => raw: %d", dstemp->name, data[0], data[1], raw);
 
     celsius = (float)raw / 16.0;
+
+    //Log.trace(" %s => tempC: %f", dstemp->name, celsius);
 
     return celsius;
 }
@@ -456,24 +562,24 @@ float convertTempCtoF(float tempC)
 
 void button_onPress(Button* button)
 {
-
+    //Log.trace("%s was clicked.", button->name);
 }
 
 void button_onRelease(Button* button)
 {
-
+    //Log.trace("%s was clicked.", button->name);
 }
 
 void button_onLongClick(Button* button)
 {
-
+    //Log.trace("%s was clicked.", button->name);
 }
 
 void button_onClick(Button* button)
 {
-    if ( strcmp("Sel", button->name) == 0 )
+    if ( strcmp("Right", button->name) == 0 )
     {
-        Log.info("'Sel' was clicked.");
+        //Log.trace("'Right' was clicked.");
         if ( achState == HIGH )
         {
             achState = LOW;
@@ -482,11 +588,34 @@ void button_onClick(Button* button)
         {
             achState = HIGH;
         }
+        pid_Heater_enabled = FALSE;
+    }
+    else if ( strcmp("Up", button->name) == 0 )
+    {
+        //Log.trace("'Up' was clicked.");
+        scanOWN();
+    }
+    else if ( strcmp("Sel", button->name) == 0 )
+    {
+        //Log.trace("'Sel' was clicked.");
+        if ( pid_Heater_enabled == TRUE )
+        {
+            pid_Heater_enabled = FALSE;
+        }
+        else
+        {
+            pid_Heater_enabled = TRUE;
+        }
     }
     else if ( strcmp("Off", button->name) == 0 )
     {
-        Log.info("'Off' was clicked.");
-        scanOWN();
+        //Log.trace("'Off' was clicked.");
+        pid_Heater_enabled = FALSE;
+        achState = LOW;
+    }
+    else
+    {
+        Log.info("%s was clicked.", button->name);
     }
 }
 
@@ -511,7 +640,7 @@ BLYNK_WRITE(V5)
         case MENU_AUTO : name = "AUTO";
     }
     fermenters[0].mode = y;
-    Log.info("Setting F1 Mode to %s", name.c_str());
+    Log.info("blynk -> Setting F1 Mode to %s", name.c_str());
 }
 BLYNK_WRITE(V6)
 {
@@ -524,23 +653,53 @@ BLYNK_WRITE(V6)
         case MENU_AUTO : name = "AUTO";
     }
     fermenters[1].mode = y;
-    Log.info("Setting F2 Mode to %s", name.c_str());
+    Log.info("blynk -> Setting F2 Mode to %s", name.c_str());
 }
 BLYNK_WRITE(V7)
 {
     int y = param.asInt();
-    Log.info("Setting F1 Target to %d", y);
+    Log.info("blynk -> Setting F1 Target to %d", y);
     fermenters[0].targetTemp = y;
 }
 BLYNK_WRITE(V8)
 {
     int y = param.asInt();
-    Log.info("Setting F2 Target to %d", y);
+    Log.info("blynk -> Setting F2 Target to %d", y);
     fermenters[1].targetTemp = y;
 }
 BLYNK_WRITE(V3)
 {
     int y = param.asInt();
-    Log.info("Setting Heater to %d", y);
-    achState = y;
+    String name;
+    switch (y)
+    {
+        case MENU_ON : name = "ON";
+        case MENU_OFF : name = "OFF";
+        case MENU_AUTO : name = "AUTO";
+    }
+    if ( y == MENU_ON )
+    {
+        achState = HIGH;
+        pid_Heater_enabled = FALSE;
+    }
+    else if ( y == MENU_OFF )
+    {
+        pid_Heater_enabled = FALSE;
+        achState = LOW;
+    }
+    else if ( y == MENU_AUTO )
+    {
+        pid_Heater_enabled = TRUE;
+    }
+    else
+    {
+        Log.error("Invalid menu item from Heater Control! %d", y);
+    }
+    Log.info("blynk -> Setting Heater to %s", name.c_str());
+}
+BLYNK_WRITE(V11)
+{
+    int y = param.asInt();
+    Log.info("blynk -> Setting Heater PID Target to %d", y);
+    pid_Heater_Setpoint = y;
 }

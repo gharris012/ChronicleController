@@ -1,12 +1,12 @@
 #include "Button.h"
 
-void check_buttons(Button *fbuttons)
+void check_buttons(Button *fbuttons, uint8_t buttonCount)
 {
     uint8_t i;
     uint8_t buttonState;
 
     // check the buttons
-    for ( i = 0 ; i < BUTTON_COUNT ; i ++ )
+    for ( i = 0 ; i < buttonCount ; i ++ )
     {
         if ( fbuttons[i].mcp != 0 )
         {
@@ -57,11 +57,11 @@ void check_buttons(Button *fbuttons)
     }
 }
 
-void setup_buttons(Button *fbuttons)
+void setup_buttons(Button *fbuttons, uint8_t buttonCount)
 {
     uint8_t i;
 
-    for ( i = 0 ; i < BUTTON_COUNT ; i ++ )
+    for ( i = 0 ; i < buttonCount ; i ++ )
     {
         Log.info("setting up %s", fbuttons[i].name);
         if ( fbuttons[i].mcp != 0 )
