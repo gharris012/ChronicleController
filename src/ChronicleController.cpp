@@ -1,11 +1,11 @@
 #include "config.h"
 #include "keys.h"
-#include "blynk.h"
+#include "lib/blynk.h"
 //#define BLYNK_PRINT Serial
 
 Adafruit_MCP23017 mcp;
 byte achState = LOW;
-Adafruit_SSD1306 display(OLED_RESET);
+Adafruit_SSD1306 display;
 OneWire own(OWNPIN);
 TCPClient TheClient;
 Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY);
@@ -67,7 +67,7 @@ Fermenter fermenters[FERMENTERCOUNT] =
 
 const byte THERMISTORCOUNT = 1;
 Thermistor thermistors[THERMISTORCOUNT] = {
-    { "A/C TStat", A2, 4, 0, NULL }
+    { "A/C TStat", A2, 0, 4, NULL }
 };
 
 Button buttons[BUTTON_COUNT] = {
@@ -84,7 +84,7 @@ Button buttons[BUTTON_COUNT] = {
 
 void setup() {
     Serial.begin(9600);
-    delay(1000); // allow time to connect serial monitor
+    delay(2000); // allow time to connect serial monitor
 
     Log.info("System started");
     Log.info("Device ID: %s", (const char*)System.deviceID());
@@ -93,6 +93,14 @@ void setup() {
 
     Log.info("setting up blynk");
     Blynk.begin(BLYNK_KEY);
+
+    Log.info("connecting up AIO");
+    int8_t aio_state = mqtt.connect();
+    if ( aio_state != 0 )
+    {
+        Log.warn("Unable to connect to aio: %s", mqtt.connectErrorString(aio_state));
+    }
+
 
     mcp.begin();
     mcp.pinMode(ACHPIN, OUTPUT);
@@ -283,6 +291,7 @@ void loop()
                         }
                         if ( dsTemp[i].aioFeed )
                         {
+                            Log.info(" updating aio feed");
                             dsTemp[i].aioFeed->publish(therm);
                         }
                     }

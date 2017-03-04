@@ -3,6 +3,9 @@
 
 #define BUTTON_DEBOUNCE_DELAY 10
 #define BUTTON_LONGPRESS_THRESHOLD 300
+#ifndef BUTTON_COUNT
+    #define BUTTON_COUNT 2
+#endif
 
 #include "Adafruit_MCP23017.h"
 

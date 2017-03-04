@@ -1,3 +1,0 @@
-#define AIO_KEY "1295193af050298fcec12cb68474fa6919c4a7c6"
-#define AIO_USERNAME "gharris"
-#define BLYNK_KEY "8a561dda6d744712a719816b3f41e25b"

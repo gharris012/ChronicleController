@@ -144,6 +144,12 @@ Adafruit_GFX(SSD1306_LCDWIDTH, SSD1306_LCDHEIGHT) {
   sclk = dc = cs = sid = -1;
   rst = reset;
 }
+// initializer for I2C - we only indicate the reset pin!
+Adafruit_SSD1306::Adafruit_SSD1306() :
+Adafruit_GFX(SSD1306_LCDWIDTH, SSD1306_LCDHEIGHT) {
+  sclk = dc = cs = sid = -1;
+  rst = NULL;
+}
 
 
 void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr) {
@@ -174,17 +180,20 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr) {
   }
 
   // Setup reset pin direction (used by both SPI and I2C)
-  pinMode(rst, OUTPUT);
-  digitalWrite(rst, HIGH);
-  // VDD (3.3V) goes high at start, lets just chill for a ms
-  delay(1);
-  // bring reset low
-  digitalWrite(rst, LOW);
-  // wait 10ms
-  delay(10);
-  // bring out of reset
-  digitalWrite(rst, HIGH);
-  // turn on VCC (9V?)
+  if ( rst )
+  {
+    pinMode(rst, OUTPUT);
+    digitalWrite(rst, HIGH);
+    // VDD (3.3V) goes high at start, lets just chill for a ms
+    delay(1);
+    // bring reset low
+    digitalWrite(rst, LOW);
+    // wait 10ms
+    delay(10);
+    // bring out of reset
+    digitalWrite(rst, HIGH);
+    // turn on VCC (9V?)
+  }
 
    #if defined SSD1306_128_32
     // Init sequence for 128x32 OLED module

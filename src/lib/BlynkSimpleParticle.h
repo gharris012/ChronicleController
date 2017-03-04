@@ -16,6 +16,6 @@
 static BlynkTransportParticle _blynkTransport;
 BlynkParticle Blynk(_blynkTransport);
 
-#include "BlynkWidgets.h"
+//#include "BlynkWidgets.h"
 
 #endif

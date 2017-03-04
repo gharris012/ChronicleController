@@ -1,19 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#include "application.h"
-#include <math.h>
-#include "Button.h"
-#include "Adafruit_GFX.h"
-#include "Adafruit_SSD1306.h"
-#include "Adafruit_MCP23017.h"
-#include "OneWire.h"
-#include "pid.h"
-#include "Adafruit_MQTT_SPARK.h"
-#include "Adafruit_MQTT.h"
-
 #define APP_VERSION "05"
-
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883
 
@@ -29,8 +17,16 @@
 #define MENU_OFF 2
 #define MENU_AUTO 3
 
-// we don't actually have an OLED reset pin, but the constructor needs it
-#define OLED_RESET D4
+#include "application.h"
+#include <math.h>
+#include "lib/Button.h"
+#include "lib/Adafruit_GFX.h"
+#include "lib/Adafruit_SSD1306.h"
+#include "lib/Adafruit_MCP23017.h"
+#include "lib/OneWire.h"
+#include "lib/pid.h"
+#include "lib/Adafruit_MQTT_SPARK.h"
+#include "lib/Adafruit_MQTT.h"
 
 typedef struct DSTempSensor
 {
@@ -47,10 +43,10 @@ typedef struct Thermistor
 {
     char name[10];
     byte pin;
+    float tempF;
+
     uint8_t blynkPin;
     Adafruit_MQTT_Publish *aioFeed;
-
-    float tempF;
 } Thermistor;
 
 typedef struct Fermenter
@@ -59,11 +55,14 @@ typedef struct Fermenter
     DSTempSensor *dstemp;
     uint8_t targetTemp;
     byte mode;
-};
+} Fermenter;
 
 float readTempC(byte pin); // analog thermistor
 float readTempC(DSTempSensor *dstemp);
+float readTempC(Thermistor *thermistor);
 float convertTempCtoF(float tempC);
 void displayLine(byte line, char *message, bool clear);
+void resetOWN();
+void scanOWN();
 
 #endif
