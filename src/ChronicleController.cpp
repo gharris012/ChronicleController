@@ -1,3 +1,5 @@
+// == [ includes ] ==
+
 #include "config.h"
 #include "keys.h"
 #include "lib/blynk.h"
@@ -10,6 +12,9 @@ byte achState = LOW;
 Adafruit_SSD1306 display;
 OneWire own(OWNPIN);
 HttpClient http;
+
+IPAddress WebPowerSwitch_IPAddress = {192,168,2,9};
+int WebPowerSwitch_Port = 80;
 
 http_header_t WebPowerSwitch_Headers[] = {
     //  { "Content-Type", "application/json" },
@@ -34,6 +39,11 @@ const char WebPowerSwitch_BaseUrl[] = "/outlet?";
 
 SerialLogHandler logHandler(LOG_LEVEL_ALL);
 
+// == [ setup ] ==
+
+bool ds_temp_sensor_is_converting = FALSE;
+unsigned long int ds_temp_sensor_convert_complete_time = 0;
+const byte DS_TEMP_SENSOR_CONVERT_DURATION = 250;
 const float INVALID_TEMPERATURE = -123;
 const byte DS_SENSOR_COUNT = 5;
 const byte DS_FERMENTER_1 = 0;
@@ -124,8 +134,14 @@ Fermenter fermenters[FERMENTER_COUNT] = {
     { "F1", &control_F2 }
 };
 
+// after the chiller is turned off, keep checking heater until it gets below
+// {{control_set_temperature}}, then mark chiller as off, and start fan-off
 const byte WPS_CHILLER_FAN_SOCKET = 3;
+const byte CHILLER_UPDATE_DELAY = 60; // in seconds ~ ish
+const byte CHILLER_HIGH_DIFF_THRESHOLD = 5; // if we are more than 5 degrees off either client, go into high differential mode
 const int CHILLER_FAN_POST_TIME = 60000;
+bool chiller_check_heater_status = FALSE;
+int chiller_check_heater_delay = 1000;
 Chiller chiller = {
     "C-Ctrl",
     &control_Heater,
@@ -151,26 +167,17 @@ Button buttons[BUTTON_COUNT] = {
     { "Off", 2, &mcp }
 };
 
-//Timer //Timer_Check_Buttons(48, timer_check_buttons);
-Timer Timer_Read_Temperatures(952, read_temperatures);
-// this launches on-demand after a temperature read is scheduled
-Timer Timer_Read_DS_Temperatures(247, read_ds_temperatures, true);
-Timer Timer_Update_Pids(9983, update_pids);
-//Timer Timer_Run_Controls(10, run_controls);
-Timer Timer_Check_Memory(9345, check_memory);
-
-// this is also called whenever a chiller-affecting setting is changed
-//Timer Timer_Update_Chiller(59876, //update_chiller);
-//Timer Timer_Chiller_Fan_Off(CHILLER_FAN_POST_TIME, chiller_fan_off, true);
-// after the chiller is turned off, keep checking heater until it gets below
-// {{control_set_temperature}}, then mark chiller as off, and start fan-off
-//Timer Timer_Chiller_Check_Heater(1000, chiller_check_heater, true);
+Timer Timer_Read_Temperatures(1000, read_temperatures);
+Timer Timer_Update_Pids(1000, update_pids);
+Timer Timer_Check_Memory(5000, check_memory);
 
 char display_buffer[10];
 
 void setup() {
     Serial.begin(115200);
     delay(2000); // allow time to connect serial monitor
+
+    Timer_Check_Memory.start();
 
     Log.info("System started");
     Log.info("Device ID: %s", (const char*)System.deviceID());
@@ -183,12 +190,12 @@ void setup() {
     mcp.digitalWrite(control_Heater.actuator.pin, LOW);
     pinMode(control_Heater.thermistor->pin, INPUT);
 
-    WebPowerSwitch_Request.ip = {192,168,2,9};
-    WebPowerSwitch_Request.port = 80;
+    WebPowerSwitch_Request.ip = WebPowerSwitch_IPAddress;
+    WebPowerSwitch_Request.port = WebPowerSwitch_Port;
 
     Log.info("Turning everything off");
     all_off();
-    //Timer_Run_Controls.start();
+    run_controls();
 
     Log.info("Setting up OWN");
     scanOWN();
@@ -208,10 +215,10 @@ void setup() {
 
     Log.info("Setting up PIDs");
     setup_pids();
+    Timer_Update_Pids.start();
 
-    //Log.info("Setting up buttons");
-    //setup_buttons(buttons, BUTTON_COUNT);
-    //Timer_Check_Buttons.start();
+    Log.info("Setting up buttons");
+    setup_buttons(buttons, BUTTON_COUNT);
 
     //Log.info("setting up blynk");
     //Blynk.begin(BLYNK_KEY);
@@ -244,9 +251,6 @@ void setup() {
     display.print(display_buffer);
     display.display();
 
-    Log.info("Free memory: %ld", System.freeMemory());
-    Timer_Check_Memory.start();
-
 /*
     **********
     A 76.0 02 -- prod
@@ -260,6 +264,18 @@ void setup() {
 
 void loop()
 {
+    timer_check_buttons();
+    run_controls();
+
+    if ( ds_temp_sensor_is_converting && millis() > ds_temp_sensor_convert_time )
+    {
+        read_ds_temperatures();
+    }
+    if ( chiller_check_heater_status && millis() > chiller_check_heater_next_time )
+    {
+        chiller_check_heater();
+    }
+
     //Blynk.run();
 
     /*
@@ -559,13 +575,20 @@ void setup_pids()
 
 void update_pids()
 {
+    static int check_count = 0;
+
+    check_count++;
     Log.info("Updating PIDS");
     update_pid(&control_F1);
     update_pid(&control_F2);
     update_pid(&control_Heater);
-    //update_chiller();
 
-    //Timer_Run_Controls.start();
+    // chiller doesn't need to be updated very often
+    if ( check_count >= CHILLER_UPDATE_DELAY )
+    {
+        update_chiller();
+        check_count = 0;
+    }
 }
 
 // calculate and update vars - every second
@@ -585,7 +608,7 @@ void update_pid(TemperatureControl *control)
         Log.warn(" no temperature source!");
     }
 
-    if ( control->mode == AUTO_MODE_PID )
+    if ( control->tempF != INVALID_TEMPERATURE && control->mode == AUTO_MODE_PID )
     {
         control->input = control->tempF;
         control->error = control->target - control->input;
@@ -609,13 +632,48 @@ void update_chiller()
 
     if ( chiller.mode == AUTO_MODE_AUTO )
     {
-        if ( chiller.dstempsensor->tempF > chiller.target )
+        // set up chiller target
+        //  gather fermenter target temperatures
+        //  chiller target = min of both - offset, or min_temperature, whichever is higher
+
+        float f_diff = max(fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target,
+                        fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target);
+        float f_target = min(fermenters[F_FERMENTER_1].control->target,
+                                fermenters[F_FERMENTER_2].control->target);
+
+        int offset;
+        int threshold_high;
+        int threshold_low;
+
+        if ( f_diff > CHILLER_HIGH_DIFF_THRESHOLD )
         {
-            state = FALSE;
+            Log.trace(" high differential");
+            offset = chiller.high_target_offset;
+            threshold_high = chiller.high_threshold_high;
+            threshold_low = chiller.high_threshold_low;
         }
         else
         {
+            Log.trace(" normal differential");
+            offset = chiller.normal_target_offset;
+            threshold_high = chiller.normal_threshold_high;
+            threshold_low = chiller.normal_threshold_low;
+        }
+
+        chiller.target = max(f_target - offset, chiller.min_temperature);
+
+        Log.trace(" current: %2f ; target: %2f", chiller.dstempsensor->tempF, chiller.target);
+
+        // if we're off, kick on when we get over target+threshold
+        // if we're on, stay on until we are below target-threshold
+        if ( ( chiller.state == FALSE && chiller.dstempsensor->tempF > ( chiller.target + threshold_high ) )
+            || ( chiller.state == TRUE && chiller.dstempsensor->tempF > ( chiller.target - threshold_low ) ) )
+        {
             state = TRUE;
+        }
+        else
+        {
+            state = FALSE;
         }
     }
     else if ( chiller.mode == AUTO_MODE_ON )
@@ -631,6 +689,36 @@ void update_chiller()
         Log.warn(" Unknown mode requested: %d", chiller.mode);
     }
 
+    // Filter Chiller logic: have we been on or off long enough?
+    if ( chiller.state != state && chiller.timer_last > 0 )
+    {
+        // on and on_time > min_on_time
+        if ( chiller.state == TRUE
+                && chiller.timer_last + chiller.min_on_time > millis() )
+        {
+            state = TRUE;
+        }
+        // off and off_time > min_off_time
+        if ( chiller.state == FALSE
+                && chiller.timer_last + chiller.min_off_time > millis() )
+        {
+            state = FALSE;
+        }
+
+        if ( chiller.state == state )
+        {
+            Log.warn(" overriding due to min on/off time: %d", chiller.state);
+        }
+    }
+
+    // override : current temp < min temp -> shut it down!
+    //  ... or at least start the shut down process
+    if ( chiller.chiller.dstempsensor->tempF <= chiller.min_temperature )
+    {
+        Log.warn(" temp too low, shutting down");
+        state = FALSE;
+    }
+
     // if we decide the A/C should be on, turn on the heater PID
     if ( chiller.state != state )
     {
@@ -638,9 +726,9 @@ void update_chiller()
         chiller.timer_last = millis();
         if ( state )
         {
-            // make sure fan isn't scheduled to turn off
-            //Timer_Chiller_Check_Heater.stop();
-            //Timer_Chiller_Fan_Off.stop();
+            Log.info(" turning Chiller ON");
+            // make sure fan/heater aren't scheduled to turn off
+            chiller_check_heater_status = FALSE;
             actuate(&chiller.fan, TRUE);
 
             chiller.heater->mode = AUTO_MODE_PID;
@@ -648,8 +736,10 @@ void update_chiller()
         }
         else
         {
+            Log.info(" turning Chiller OFF");
             chiller.heater->mode = AUTO_MODE_OFF;
-            //Timer_Chiller_Check_Heater.start();
+            chiller_check_heater_status = TRUE;
+            chiller_check_heater_next_time = millis() + chiller_check_heater_delay;
         }
     }
 }
@@ -664,12 +754,11 @@ void chiller_check_heater()
             Log.info(" heater is back down below control_set_temperature, marking Chiller off");
             chiller.state = FALSE;
             chiller.timer_last = millis();
-            // schedule the fan to turn off
-            //Timer_Chiller_Fan_Off.start();
+            chiller_check_heater_status = FALSE;
         }
         else
         {
-            //Timer_Chiller_Check_Heater.start();
+            chiller_check_heater_next_time = millis() + chiller_check_heater_delay;
         }
     }
 }
@@ -793,8 +882,9 @@ void read_temperatures()
     own.write(0x44);
     own.reset();
     // schedule a reading from ds sensors
-    Log.trace("starting ds timer");
-    Timer_Read_DS_Temperatures.start();
+    Log.trace("scheduling ds read");
+    ds_temp_sensor_is_converting = TRUE;
+    ds_temp_sensor_convert_complete_time = millis() + DS_TEMP_SENSOR_CONVERT_DURATION;
 
     byte i = 0;
 
@@ -804,19 +894,6 @@ void read_temperatures()
         thermistors[i].tempF = convertTempCtoF(readTempC(&thermistors[i]));
     }
     Log.trace("Done reading thermistor temperatures");
-
-    // start up dependent timers
-    if ( ! Timer_Update_Pids.isActive() )
-    {
-        Log.trace("starting pids timer");
-        Timer_Update_Pids.start();
-    }
-    // if ( ! Timer_Update_Chiller.isActive() )
-    // {
-    //     Log.trace("starting chiller timer");
-    //     Timer_Update_Chiller.start();
-    // }
-    Log.trace("Additional timers launched");
 }
 
 void read_ds_temperatures()
@@ -831,12 +908,15 @@ void read_ds_temperatures()
     own.reset();
     for ( i = 0 ; i < DS_SENSOR_COUNT ; i ++ )
     {
+        float therm = INVALID_TEMPERATURE;
         if ( ds_temp_sensor[i].present )
         {
             own.reset();
             own.select(ds_temp_sensor[i].addr);
             if ( own.read() )
             {
+                // if at least one comes back, indicate that we are done converting
+                ds_temp_sensor_is_converting = FALSE;
                 therm = readTempC(&ds_temp_sensor[i]);
                 if ( therm > INVALID_TEMPERATURE )
                 {
