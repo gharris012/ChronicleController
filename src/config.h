@@ -163,4 +163,5 @@ void all_off();
 void update_display();
 void update_aio();
 void update_blynk();
+void check_memory();
 #endif

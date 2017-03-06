@@ -151,19 +151,20 @@ Button buttons[BUTTON_COUNT] = {
     { "Off", 2, &mcp }
 };
 
-Timer Timer_Check_Buttons(50, timer_check_buttons);
-Timer Timer_Read_Temperatures(1000, read_temperatures);
+//Timer //Timer_Check_Buttons(48, timer_check_buttons);
+Timer Timer_Read_Temperatures(952, read_temperatures);
 // this launches on-demand after a temperature read is scheduled
-Timer Timer_Read_DS_Temperatures(250, read_ds_temperatures, true);
-Timer Timer_Update_Pids(1000, update_pids);
-Timer Timer_Run_Controls(10, run_controls);
+Timer Timer_Read_DS_Temperatures(247, read_ds_temperatures, true);
+Timer Timer_Update_Pids(9983, update_pids);
+//Timer Timer_Run_Controls(10, run_controls);
+Timer Timer_Check_Memory(9345, check_memory);
 
 // this is also called whenever a chiller-affecting setting is changed
-Timer Timer_Update_Chiller(60000, update_chiller);
-Timer Timer_Chiller_Fan_Off(CHILLER_FAN_POST_TIME, chiller_fan_off, true);
+//Timer Timer_Update_Chiller(59876, //update_chiller);
+//Timer Timer_Chiller_Fan_Off(CHILLER_FAN_POST_TIME, chiller_fan_off, true);
 // after the chiller is turned off, keep checking heater until it gets below
 // {{control_set_temperature}}, then mark chiller as off, and start fan-off
-Timer Timer_Chiller_Check_Heater(1000, chiller_check_heater, true);
+//Timer Timer_Chiller_Check_Heater(1000, chiller_check_heater, true);
 
 char display_buffer[10];
 
@@ -208,11 +209,11 @@ void setup() {
     Log.info("Setting up PIDs");
     setup_pids();
 
-    Log.info("Setting up buttons");
-    setup_buttons(buttons, BUTTON_COUNT);
+    //Log.info("Setting up buttons");
+    //setup_buttons(buttons, BUTTON_COUNT);
     //Timer_Check_Buttons.start();
 
-    Log.info("setting up blynk");
+    //Log.info("setting up blynk");
     //Blynk.begin(BLYNK_KEY);
 
     #ifdef AIO_ENABLE
@@ -242,6 +243,10 @@ void setup() {
     snprintf(display_buffer, sizeof(display_buffer), "Ready %s", (const char*)APP_VERSION);
     display.print(display_buffer);
     display.display();
+
+    Log.info("Free memory: %ld", System.freeMemory());
+    Timer_Check_Memory.start();
+
 /*
     **********
     A 76.0 02 -- prod
@@ -439,6 +444,11 @@ void loop()
     */
 }
 
+void check_memory()
+{
+    Log.info("Free memory: %ld", System.freeMemory());
+}
+
 void update_display()
 {
 
@@ -549,12 +559,13 @@ void setup_pids()
 
 void update_pids()
 {
+    Log.info("Updating PIDS");
     update_pid(&control_F1);
     update_pid(&control_F2);
     update_pid(&control_Heater);
-    update_chiller();
+    //update_chiller();
 
-    Timer_Run_Controls.start();
+    //Timer_Run_Controls.start();
 }
 
 // calculate and update vars - every second
@@ -628,8 +639,8 @@ void update_chiller()
         if ( state )
         {
             // make sure fan isn't scheduled to turn off
-            Timer_Chiller_Check_Heater.stop();
-            Timer_Chiller_Fan_Off.stop();
+            //Timer_Chiller_Check_Heater.stop();
+            //Timer_Chiller_Fan_Off.stop();
             actuate(&chiller.fan, TRUE);
 
             chiller.heater->mode = AUTO_MODE_PID;
@@ -638,7 +649,7 @@ void update_chiller()
         else
         {
             chiller.heater->mode = AUTO_MODE_OFF;
-            Timer_Chiller_Check_Heater.start();
+            //Timer_Chiller_Check_Heater.start();
         }
     }
 }
@@ -654,11 +665,11 @@ void chiller_check_heater()
             chiller.state = FALSE;
             chiller.timer_last = millis();
             // schedule the fan to turn off
-            Timer_Chiller_Fan_Off.start();
+            //Timer_Chiller_Fan_Off.start();
         }
         else
         {
-            Timer_Chiller_Check_Heater.start();
+            //Timer_Chiller_Check_Heater.start();
         }
     }
 }
@@ -782,6 +793,7 @@ void read_temperatures()
     own.write(0x44);
     own.reset();
     // schedule a reading from ds sensors
+    Log.trace("starting ds timer");
     Timer_Read_DS_Temperatures.start();
 
     byte i = 0;
@@ -796,17 +808,21 @@ void read_temperatures()
     // start up dependent timers
     if ( ! Timer_Update_Pids.isActive() )
     {
+        Log.trace("starting pids timer");
         Timer_Update_Pids.start();
     }
-    if ( ! Timer_Update_Chiller.isActive() )
-    {
-        Timer_Update_Chiller.start();
-    }
+    // if ( ! Timer_Update_Chiller.isActive() )
+    // {
+    //     Log.trace("starting chiller timer");
+    //     Timer_Update_Chiller.start();
+    // }
     Log.trace("Additional timers launched");
 }
 
 void read_ds_temperatures()
 {
+    char buffer[10] = "DS TEMP";
+    displayLine(1, buffer, true);
     Log.info("Reading ds temperatures");
 
     byte i = 0;
