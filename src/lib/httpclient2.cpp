@@ -1,6 +1,6 @@
 #include "httpclient2.h"
 
-#define LOGGING
+//#define LOGGING
 
 static const uint16_t DEFAULT_TIMEOUT = 1000; // Allow maximum 5s between data packets.
 
@@ -175,7 +175,9 @@ void HttpClient::request(http_request_t &aRequest, http_response_t &aResponse, h
 
     unsigned int bufferPosition = 0;
     unsigned long lastRead = millis();
-    unsigned long firstRead = millis();
+    #ifdef LOGGING
+        unsigned long firstRead = millis();
+    #endif
     bool error = false;
     bool timeout = false;
     uint16_t actualTimeout = DEFAULT_TIMEOUT;

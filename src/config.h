@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "1"
+#define APP_VERSION "2"
 
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883
@@ -131,6 +131,11 @@ typedef struct Chiller
                                    // the heater above this to make the unit kick on,
                                    // and wait until after it gets below this to say
                                    // the a/c is off .. very inexact
+    int control_temperature_offset_high; // how far over the set temperature to set the heater
+                                    // lower is better since we want to recover as quickly
+                                    // as possible
+    int control_temperature_offset_low; // how far under the control temperature before
+                                    // the chiller turns off
 
     unsigned long timer_last;
 } Chiller;
@@ -144,10 +149,9 @@ typedef struct Fermenter
 float readTempC(DSTempSensor *dstemp);
 float readTempC(Thermistor *thermistor);
 float convertTempCtoF(float tempC);
-void displayLine(byte line, char *message, bool clear);
+void display_line(byte line, char *message, bool clear, bool flush);
 void resetOWN();
 void scanOWN();
-void timer_check_buttons();
 void read_temperatures();
 void read_ds_temperatures();
 void setup_pids();
@@ -164,4 +168,10 @@ void update_display();
 void update_aio();
 void update_blynk();
 void check_memory();
+
+void mode_for_display(bool state, char *buffer, byte buffer_size);
+void mode_for_display(bool state, float tempF, char *buffer, byte buffer_size);
+void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size);
+void mode_as_string(byte mode, char *buffer, byte buffer_size);
+void tempF_for_display(float tempF, char buffer[], byte buffer_size);
 #endif
