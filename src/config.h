@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "2"
+#define APP_VERSION "v1"
 
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883
@@ -42,6 +42,9 @@ typedef struct DSTempSensor
     Adafruit_MQTT_Publish *aioFeed;
 
     float tempF;
+
+    float last_tempF;
+    int last_valid_read;
     bool present;
 } DSTempSensor;
 

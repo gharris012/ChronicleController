@@ -71,7 +71,7 @@ bool PID::Compute()
       double output = kp * error + ITerm- kd * dInput;
 
 	  if(output > outMax) output = outMax;
-      else if(output < outMin) output = outMin;
+      else if(output > 0 && output < outMin) output = outMin;
 	  *myOutput = output;
 
       /*Remember some variables for next time*/
