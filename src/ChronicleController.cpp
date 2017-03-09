@@ -13,7 +13,7 @@ Adafruit_SSD1306 display;
 OneWire own(OWNPIN);
 HttpClient http;
 
-IPAddress WebPowerSwitch_IPAddress = {192,168,2,9};
+IPAddress WebPowerSwitch_IPAddress = {192,168,1,97};
 int WebPowerSwitch_Port = 80;
 
 http_header_t WebPowerSwitch_Headers[] = {
