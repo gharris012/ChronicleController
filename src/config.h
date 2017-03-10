@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "v3"
+#define APP_VERSION "v5"
 
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883
@@ -177,4 +177,14 @@ void mode_for_display(bool state, float tempF, char *buffer, byte buffer_size);
 void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size);
 void mode_as_string(byte mode, char *buffer, byte buffer_size);
 void tempF_for_display(float tempF, char buffer[], byte buffer_size);
+
+
+void ppublish(String message);
+void ppublish(String message, int value);
+void ppublish(String message, int value, unsigned long int value2);
+void ppublish(String message, float value);
+void ppublish(String message, const char *value);
+void ppublish(String message, const char *value, int value2);
+void ppublish(String message, const char *value, const char *value2);
+
 #endif
