@@ -1,35 +1,28 @@
-# ChronicleController-WebSwitch
+# This directory is set up as a [po-util](https://po-util.com) project
 
-A Particle project named ChronicleController-WebSwitch
+Po-util makes it easy to locally develop firmware for Particle devices.
 
-## Welcome to your project!
+Po-util supports the Particle Photon, P1, Electron, Core, Raspberry Pi, and Redbear Duo
 
-Every new Particle project is composed of 3 important elements that you'll see have been created in your project directory for ChronicleController-WebSwitch.
+# Project structure
+The C++ files go in the `firmware/` directory, and the compiled binary will appear in the `bin/` directory, named `firmware.bin`.
 
-#### ```/src``` folder:  
-This is the source folder that contains the firmware files for your project. It should *not* be renamed. 
-Anything that is in this folder when you compile your project will be sent to our compile service and compiled into a firmware binary for the Particle device that you have targeted.
+To compile code, run `po DEVICE_TYPE build`, substituting `DEVICE_TYPE` with `photon`, `P1`, `electron`, `core`, `pi`, or `duo`.
 
-If your application contains multiple files, they should all be included in the `src` folder. If your firmware depends on Particle libraries, those dependencies are specified in the `project.properties` file referenced below.
+To compile and flash code, run `po DEVICE_TYPE flash`. Code is compiled and then flashed to your device over USB using dfu-util.
 
-#### ```.ino``` file:
-This file is the firmware that will run as the primary application on your Particle device. It contains a `setup()` and `loop()` function, and can be written in Wiring or C/C++. For more information about using the Particle firmware API to create firmware for your Particle device, refer to the [Firmware Reference](https://docs.particle.io/reference/firmware/) section of the Particle documentation.
+To build your firmware without flashing, run `po DEVICE_TYPE build`.
 
-#### ```project.properties``` file:  
-This is the file that specifies the name and version number of the libraries that your project depends on. Dependencies are added automatically to your `project.properties` file when you add a library to a project using the `particle library add` command in the CLI or add a library in the Desktop IDE.
+To clean the project, run `po DEVICE_TYPE clean`.
 
-## Adding additional files to your project
+To upload a pre-compiled project over USB, run `po DEVICE_TYPE dfu`.
 
-#### Projects with multiple sources
-If you would like add additional files to your application, they should be added to the `/src` folder. All files in the `/src` folder will be sent to the Particle Cloud to produce a compiled binary.
+To put your device into DFU mode, run `po dfu-open`.
 
-#### Projects with external libraries
-If your project includes a library that has not been registered in the Particle libraries system, you should create a new folder named `/lib/<libraryname>/src` under `/<project dir>` and add the `.h` and `.cpp` files for your library there. All contents of the `/lib` folder and subfolders will also be sent to the Cloud for compilation.
+To get your device out of DFU mode, run `po dfu-close`.
 
-## Compiling your project
+To upload precompiled code over the air using particle-cli, run `po DEVICE ota DEVICE_NAME`, where `DEVICE_NAME` is the name of your device in the Particle cloud. Note: You must be logged into particle-cli to use this feature. You can log into particle-cli with `particle cloud login`.
 
-When you're ready to compile your project, make sure you have the correct Particle device target selected and run `particle compile <platform>` in the CLI or click the Compile button in the Desktop IDE. The following files in your project folder will be sent to the compile service:
+For more help, run `man po`, or visit <https://docs.po-util.com/>
 
-- Everything in the `/src` folder, including your `.ino` application file
-- The `project.properties` file for your project
-- Any libraries stored under `lib/<libraryname>/src`
+Feel free to replace this README with content more suitable to your project.

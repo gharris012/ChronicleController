@@ -62,25 +62,25 @@ const byte DS_AMBIENT = 2;
 const byte DS_CHILLER = 3;
 DSTempSensor ds_temp_sensor[DS_SENSOR_COUNT] = {
     {
-        "04-73", // Fermenter 1
+        "Ferm1", // Fermenter 1
         {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
         1, NULL,
         INVALID_TEMPERATURE, FALSE
     },
     {
-        "05-9E", // Fermenter 2
+        "Ferm2", // Fermenter 2
         {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
         2, NULL,
         INVALID_TEMPERATURE, FALSE
     },
     {
-        "05-AD", // Ambient
+        "Amb", // Ambient
         {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
         9, NULL,
         INVALID_TEMPERATURE, FALSE
     },
     {
-        "05-C9", // Chiller
+        "Chill", // Chiller
         {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
         10, NULL,
         INVALID_TEMPERATURE, FALSE
@@ -102,11 +102,13 @@ TemperatureControl control_F1 = {
     NULL,                               // thermistor
     AUTO_MODE_OFF,                      // mode
     { "F1-Act", FALSE, TRUE, WPS_F1_PUMP_SOCKET, NULL, FALSE, 0 }, // actuator - wps
+    TRUE, 0,                            // log_results
     INVALID_TEMPERATURE,                // tempF
-    PID(1),                              // PID object - will initialize later
+    PID(1),                             // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
-    10000, 30000, 30000, 0, 0,         // min, max, window, window_start, window_end
-    1000, 0.8, 8000                        // Kp, Ki, Kd
+    3, 1, 1,                            // auto_high, auto_low, hysterisis
+    10000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
+    1000, 20, 0                         // Kp, Ki, Kd
 };
 
 const byte WPS_F2_PUMP_SOCKET = 2;
@@ -116,11 +118,13 @@ TemperatureControl control_F2 = {
     NULL,                               // thermistor
     AUTO_MODE_OFF,                      // mode
     { "F2-Act", FALSE, TRUE, WPS_F2_PUMP_SOCKET, NULL, FALSE, 0 }, // actuator - wps
+    TRUE, 0,                            // log_results
     INVALID_TEMPERATURE,                // tempF
-    PID(1),                              // PID object - will initialize later
+    PID(1),                             // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
-    10000, 30000, 30000, 0, 0,         // min, max, window, window_start, window_end
-    1000, 0.8, 8000                        // Kp, Ki, Kd
+    3, 1, 1,                            // auto_high, auto_low, hysterisis
+    10000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
+    1000, 20, 0                         // Kp, Ki, Kd
 };
 
 TemperatureControl control_Heater = {
@@ -129,11 +133,13 @@ TemperatureControl control_Heater = {
     &thermistors[THERM_HEATER],         // thermistor
     AUTO_MODE_OFF,                      // mode
     { "H-Act", TRUE, FALSE, 8, NULL, FALSE, 0 }, // actuator - mcp
+    TRUE, 0,                            // log_results
     INVALID_TEMPERATURE,                // tempF
-    PID(1),                              // PID object - will initialize later
+    PID(1),                             // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
+    3, 1, 1,                            // auto_high, auto_low, hysterisis
     0, 1000, 1000, 0, 0,                // min, max, window, window_start, window_end
-    100, 0.15, 1000                     // Kp, Ki, Kd
+    1000, 20, 0                         // Kp, Ki, Kd
 };
 
 const byte FERMENTER_COUNT = 2;
@@ -193,6 +199,13 @@ unsigned long int update_display_next_time = update_display_delay;
 // five seconds
 const int update_blynk_delay = 5000;
 unsigned long int update_blynk_next_time = update_blynk_delay;
+
+// debug particle publish delay
+const int update_particle_debug_delay = 5000;
+const int update_particle_debug_pid_delay = 10000;
+
+// normal particle publish delay
+const int update_particle_publish_delay = 1000;
 
 // one minute
 const int update_aio_delay = 60000;
@@ -478,7 +491,7 @@ void update_blynk()
     Blynk.virtualWrite(14, (int) blynkReport);
     if ( blynkReport != blynk_pid_f1_last_report )
     {
-        ppublish(" Fermenter 1: %d", (int) blynkReport);
+        ppublish(" Fermenter 1: PID %d %%", (int) blynkReport);
         blynk_pid_f1_last_report = blynkReport;
     }
 
@@ -503,7 +516,7 @@ void update_blynk()
     Blynk.virtualWrite(15, (int) blynkReport);
     if ( blynkReport != blynk_pid_f2_last_report )
     {
-        ppublish(" Fermenter 2: %d", (int) blynkReport);
+        ppublish(" Fermenter 2: PID %d %%", (int) blynkReport);
         blynk_pid_f2_last_report = blynkReport;
     }
 
@@ -662,19 +675,19 @@ void setup_pids()
 {
     control_F1.pid.init(&control_F1.input, &control_F1.output, &control_F1.target,
                         control_F1.Kp, control_F1.Ki, control_F1.Kd, PID::REVERSE);
-    control_F1.pid.SetOutputLimits(control_F1.min, control_F1.max);
+    control_F1.pid.SetOutputLimits(0, control_F1.window_max);
     control_F1.pid.SetMode(PID::AUTOMATIC);
     control_F1.pid.SetSampleTime(control_F1.window);
 
     control_F2.pid.init(&control_F2.input, &control_F2.output, &control_F2.target,
                         control_F2.Kp, control_F2.Ki, control_F2.Kd, PID::REVERSE);
-    control_F2.pid.SetOutputLimits(control_F2.min, control_F2.max);
+    control_F2.pid.SetOutputLimits(0, control_F2.window_max);
     control_F2.pid.SetMode(PID::AUTOMATIC);
     control_F2.pid.SetSampleTime(control_F2.window);
 
     control_Heater.pid.init(&control_Heater.input, &control_Heater.output, &control_Heater.target,
                         control_Heater.Kp, control_Heater.Ki, control_Heater.Kd, PID::DIRECT);
-    control_Heater.pid.SetOutputLimits(control_Heater.min, control_Heater.max);
+    control_Heater.pid.SetOutputLimits(0, control_Heater.window_max);
     control_Heater.pid.SetMode(PID::AUTOMATIC);
     control_Heater.pid.SetSampleTime(control_Heater.window);
 }
@@ -700,6 +713,7 @@ void update_pids()
 // calculate and update vars - every second
 void update_pid(TemperatureControl *control)
 {
+    double output_adjusted;
     Log.trace("Updating Control for %s", control->name);
     if ( control->dstempsensor != NULL )
     {
@@ -716,21 +730,62 @@ void update_pid(TemperatureControl *control)
 
     if ( control->tempF != INVALID_TEMPERATURE && control->mode == AUTO_MODE_PID )
     {
-        control->input = control->tempF;
-        control->error = control->target - control->input;
-        if ( control->pid.Compute() )
+        if ( control->tempF > ( control->target - control->hysterisis ) )
         {
-            // returns true when a new computation has been done
-            // ie: new window
-            control->window_start = millis();
-            control->window_end = millis() + control->output;
-            char buffer[50];
-            snprintf(buffer, 50, "%s PID: %3.2f %3.2f %ld %ld", control->name, control->error, control->output, millis(), control->window_end);
-            if ( control->window > 1000 )
+            control->input = control->tempF;
+            control->error = control->target - control->input;
+            if ( control->pid.Compute() )
             {
-                ppublish(buffer);
+                output_adjusted = control->output;
+                // returns true when a new computation has been done
+                // ie: new window
+                control->window_start = millis();
+                if ( control->window_min > control->output )
+                {
+                    // set window to min if output is more than half of min, otherwise 0
+                    if ( ( control->window_min / 2 ) > control->output )
+                    {
+                        output_adjusted = control->window_min;
+                    }
+                    else
+                    {
+                        output_adjusted = 0;
+                    }
+                }
+                // enforce window_min for off-time as well
+                else if ( control->output > ( control->window_max - control->window_min ) )
+                {
+                    // round up
+                    if ( control->output > ( control->window_max - ( control->window_min / 2 ) ) )
+                    {
+                        output_adjusted = control->window_max;
+                    }
+                    else
+                    {
+                        output_adjusted =  control->window_max - control->window_min;
+                    }
+                }
+                else
+                {
+                    output_adjusted = control->output;
+                }
+
+                control->window_end = millis() + output_adjusted;
+
+                char buffer[50];
+                snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %ld %ld", control->name, control->error, control->output, output_adjusted, millis(), control->window_end);
+                if ( control->log_results && control->log_next_time > millis() )
+                {
+                    ppublish(buffer);
+                    control->log_next_time = millis() + update_particle_debug_pid_delay;
+                }
+                LogPID.trace(buffer);
             }
-            LogPID.trace(" %s PID Output: %3.2f %3.2f %3.2f %3.2f %ld", control->name, control->target, control->input, control->error, control->output, control->window_end);
+        }
+        else
+        {
+            // turn off if we're below the target
+            control->window_end = millis();
         }
     }
 }

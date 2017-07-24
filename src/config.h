@@ -78,6 +78,8 @@ typedef struct TemperatureControl
     Thermistor *thermistor;
     byte mode; // 1 - ON ; 2 - OFF ; 3 - AUTO
     Actuator actuator;
+    boolean log_results;       // send pid results to Particle.publish
+    unsigned long log_next_time;    // if we're logging, this is when it is safe to log again
 
     double tempF;
 
@@ -87,8 +89,12 @@ typedef struct TemperatureControl
     double output;
     double error;
 
-    int min;
-    int max;
+    double auto_threshold_high; // if we are above this amount, turn on control full-bore
+    double auto_threshold_low;  // if we are below this amount, turn off control
+    double hysterisis;
+
+    int window_min;
+    int window_max;
     int window;
     unsigned long window_start;
     unsigned long window_end;
@@ -178,6 +184,12 @@ void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size);
 void mode_as_string(byte mode, char *buffer, byte buffer_size);
 void tempF_for_display(float tempF, char buffer[], byte buffer_size);
 
+void to_json(TemperatureControl *control, char *buffer, byte buffer_size);
+void to_json(Actuator *actuator, char *buffer, byte buffer_size);
+void to_json(Fermenter *fermenter, char *buffer, byte buffer_size);
+void to_json(Chiller *chiller, char *buffer, byte buffer_size);
+
+void particle_config_act(const char *event, const char *data);
 
 void ppublish(String message);
 void ppublish(String message, int value);
