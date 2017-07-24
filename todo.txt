@@ -1,0 +1,35 @@
+== [ PID Tuning ] ==
+-- 1000 0.8 8000 - seems to hold way down well (ie: SP: 38, Ambient: 63), but continues to drive down during normal ferm (ie: SP: 68, Ambient: 63)
+-- 1000 20 0 -
+
+== [ How To Compile / Flash ] ==
+-- compile --
+// make clean / all / main
+make all PLATFORM=photon APPDIR=/c/Code/particle/projects/ChronicleController
+
+-- flash --
+export PARTICLE_DEVICE=230026001347343432313031
+particle login
+particle flash eklo_photon ChronicleController.bin
+particle flash $PARTICLE_DEVICE target/ChronicleController.bin
+particle flash $PARTICLE_DEVICE ../projects/ChronicleController/target/ChronicleController.bin
+
+-- monitor
+particle subscribe mine $PARTICLE_DEVICE
+
+== [ Todo ] ==
+ if the temp is more than X below, use 0 (ignore pid output) +PID
+ if the temp is more than Y above, use 100 (ignore pid output) +PID
+
+== [ Blynk Pinouts ] ==
+-- F1
+V7 Target
+V14 PID %
+    Error
+V1 Current
+
+-- F2
+V8
+V15 PID
+
+V2 Current

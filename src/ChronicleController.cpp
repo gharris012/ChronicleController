@@ -148,7 +148,7 @@ Fermenter fermenters[FERMENTER_COUNT] = {
 // {{control_set_temperature}}, then mark chiller as off, and start fan-off
 const byte WPS_CHILLER_FAN_SOCKET = 3;
 const byte CHILLER_UPDATE_DELAY = 60; // in seconds ~ ish
-const byte CHILLER_HIGH_DIFF_THRESHOLD = 5; // if we are more than 5 degrees off either client, go into high differential mode
+const byte CHILLER_HIGH_DIFF_THRESHOLD = 10; // if we are more than 5 degrees off either client, go into high differential mode
 const int CHILLER_FAN_POST_TIME = 60000;
 bool chiller_check_heater_status = FALSE;
 int chiller_check_heater_delay = 1000;
@@ -628,6 +628,7 @@ void scanOWN()
             if ( memcmp(addr, ds_temp_sensor[i].addr, 8) == 0 )
             {
                 Log.trace(" %s at index %d", ds_temp_sensor[i].name, i);
+                ppublish("Found sensor %s at %d", ds_temp_sensor[i].name, i);
                 ds_temp_sensor[i].present = TRUE;
             }
         }
@@ -748,10 +749,20 @@ void update_chiller()
         //  gather fermenter target temperatures
         //  chiller target = min of both - offset, or min_temperature, whichever is higher
 
-        float f_diff = max(fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target,
-                        fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target);
+        float f_diff = 0;
         float f_target = min(fermenters[F_FERMENTER_1].control->target,
                                 fermenters[F_FERMENTER_2].control->target);
+
+        if ( fermenters[F_FERMENTER_1].control->tempF != INVALID_TEMPERATURE &&
+               fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target > f_diff )
+        {
+            f_diff = fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target;
+        }
+        if ( fermenters[F_FERMENTER_2].control->tempF != INVALID_TEMPERATURE &&
+               fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target > f_diff )
+        {
+            f_diff = fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target;
+        }
 
         int offset;
         int threshold_high;
