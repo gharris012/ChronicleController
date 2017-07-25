@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "v5"
+#define APP_VERSION "r1.6"
 
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883

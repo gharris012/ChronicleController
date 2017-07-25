@@ -105,8 +105,9 @@ TemperatureControl control_F1 = {
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
-    10000, 30000, 30000, 0, 0,         // min, max, window, window_start, window_end
-    1000, 0.8, 8000                        // Kp, Ki, Kd
+
+    10000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
+    1000, 20, 0                         // Kp, Ki, Kd
 };
 
 const byte WPS_F2_PUMP_SOCKET = 2;
@@ -119,8 +120,9 @@ TemperatureControl control_F2 = {
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
-    10000, 30000, 30000, 0, 0,         // min, max, window, window_start, window_end
-    1000, 0.8, 8000                        // Kp, Ki, Kd
+
+    10000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
+    1000, 20, 0                         // Kp, Ki, Kd
 };
 
 TemperatureControl control_Heater = {
@@ -132,7 +134,7 @@ TemperatureControl control_Heater = {
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
-    0, 1000, 1000, 0, 0,                // min, max, window, window_start, window_end
+    1, 1000, 1000, 0, 0,                // min, max, window, window_start, window_end
     100, 0.15, 1000                     // Kp, Ki, Kd
 };
 
@@ -163,7 +165,7 @@ Chiller chiller = {
     20,                             // target
     10, 5, 5,                       // normal: target offset, high threshold, low threshold
     20, 10, 10,                     // high differential: target offset, high threshold, low threshold
-    18,                             // min temperature
+    25,                             // min temperature
     5*60000,                        // min on time - 5 minutes
     5*60000,                        // min off time
     80, 5, 2,                        // control_set_temperature, control_temperature_offset_high, control_temperature_offset_low
@@ -512,7 +514,7 @@ void update_blynk()
     // set chill target - V11
     Blynk.virtualWrite(11, chiller.target);
     // set fan status - 1/0 - V12
-    Blynk.virtualWrite(12, chiller.fan.state);
+    Blynk.virtualWrite(12, ( chiller.fan.state ? 255 : 0 ));
 }
 
 void tempF_for_display(float tempF, char *buffer, byte buffer_size)
@@ -663,19 +665,19 @@ void setup_pids()
 {
     control_F1.pid.init(&control_F1.input, &control_F1.output, &control_F1.target,
                         control_F1.Kp, control_F1.Ki, control_F1.Kd, PID::REVERSE);
-    control_F1.pid.SetOutputLimits(control_F1.min, control_F1.max);
+    control_F1.pid.SetOutputLimits(0, control_F1.max);
     control_F1.pid.SetMode(PID::AUTOMATIC);
     control_F1.pid.SetSampleTime(control_F1.window);
 
     control_F2.pid.init(&control_F2.input, &control_F2.output, &control_F2.target,
                         control_F2.Kp, control_F2.Ki, control_F2.Kd, PID::REVERSE);
-    control_F2.pid.SetOutputLimits(control_F2.min, control_F2.max);
+    control_F2.pid.SetOutputLimits(0, control_F2.max);
     control_F2.pid.SetMode(PID::AUTOMATIC);
     control_F2.pid.SetSampleTime(control_F2.window);
 
     control_Heater.pid.init(&control_Heater.input, &control_Heater.output, &control_Heater.target,
                         control_Heater.Kp, control_Heater.Ki, control_Heater.Kd, PID::DIRECT);
-    control_Heater.pid.SetOutputLimits(control_Heater.min, control_Heater.max);
+    control_Heater.pid.SetOutputLimits(0, control_Heater.max);
     control_Heater.pid.SetMode(PID::AUTOMATIC);
     control_Heater.pid.SetSampleTime(control_Heater.window);
 }
@@ -701,6 +703,7 @@ void update_pids()
 // calculate and update vars - every second
 void update_pid(TemperatureControl *control)
 {
+    double output_adjusted;
     Log.trace("Updating Control for %s", control->name);
     if ( control->dstempsensor != NULL )
     {
@@ -719,19 +722,58 @@ void update_pid(TemperatureControl *control)
     {
         control->input = control->tempF;
         control->error = control->target - control->input;
+        int adjustedFlag = 0;
         if ( control->pid.Compute() )
         {
+            output_adjusted = control->output;
+            if ( output_adjusted < 0 )
+            {
+                output_adjusted = 0;
+                adjustedFlag |= 1;
+            }
             // returns true when a new computation has been done
             // ie: new window
             control->window_start = millis();
-            control->window_end = millis() + control->output;
-            char buffer[50];
-            snprintf(buffer, 50, "%s PID: %3.2f %3.2f %ld %ld", control->name, control->error, control->output, millis(), control->window_end);
-            if ( control->window > 1000 )
+            if ( control->min > output_adjusted )
             {
-                ppublish(buffer);
+                // set window to min if output is more than half of min, otherwise 0
+                if ( ( control->min / 2 ) < output_adjusted )
+                {
+                    output_adjusted = control->min;
+                    adjustedFlag |= 2;
+                }
+                else
+                {
+                    output_adjusted = 0;
+                    adjustedFlag |= 4;
+                }
             }
-            LogPID.trace(" %s PID Output: %3.2f %3.2f %3.2f %3.2f %ld", control->name, control->target, control->input, control->error, control->output, control->window_end);
+            // enforce window_min for off-time as well
+            // -- leave window_min at the end
+            else if ( output_adjusted > ( control->max - control->min ) )
+            {
+                // round up
+                if ( output_adjusted > ( control->max - ( control->min / 2 ) ) )
+                {
+                    output_adjusted = control->max;
+                    adjustedFlag |= 8;
+                }
+                else
+                {
+                    output_adjusted =  control->max - control->min;
+                    adjustedFlag |= 16;
+                }
+            }
+
+            control->window_end = millis() + output_adjusted;
+            char buffer[50];
+            //snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %ld %ld %d", control->name, control->error, control->output, output_adjusted, millis(), control->window_end, adjustedFlag);
+            snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->output, output_adjusted, adjustedFlag);
+            ppublish(buffer);
+            LogPID.trace(buffer);
+
+            // reset output to adjusted so PID can use it in the next computation
+            control->output = output_adjusted;
         }
     }
 }
