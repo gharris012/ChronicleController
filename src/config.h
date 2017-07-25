@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "v5"
+#define APP_VERSION "b1"
 
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883
@@ -133,8 +133,8 @@ typedef struct Chiller
     // we will monitor the heater temperature
     //  when it is above control_set_temperature, we will assume the a/c is on
     //  when it is below, we will assume the a/c is off
-    int min_on_time;    // minimum time for the chiller to be on
-    int min_off_time;   // minimum time for the chiller to be off
+    unsigned long min_on_time;    // minimum time for the chiller to be on
+    unsigned long min_off_time;   // minimum time for the chiller to be off
 
     int control_set_temperature;   // what the a/c control unit is set to .. we need to set
                                    // the heater above this to make the unit kick on,
@@ -193,6 +193,7 @@ void particle_config_act(const char *event, const char *data);
 
 void ppublish(String message);
 void ppublish(String message, int value);
+void ppublish(String message, int value, int value2, unsigned long int value3);
 void ppublish(String message, int value, unsigned long int value2);
 void ppublish(String message, float value);
 void ppublish(String message, const char *value);
