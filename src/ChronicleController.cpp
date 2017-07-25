@@ -106,8 +106,8 @@ TemperatureControl control_F1 = {
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
 
-    10000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
-    1000, 20, 0                         // Kp, Ki, Kd
+    5000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
+    1000, 40, 1                         // Kp, Ki, Kd
 };
 
 const byte WPS_F2_PUMP_SOCKET = 2;
@@ -121,8 +121,8 @@ TemperatureControl control_F2 = {
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
 
-    10000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
-    1000, 20, 0                         // Kp, Ki, Kd
+    5000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
+    1000, 40, 1                         // Kp, Ki, Kd
 };
 
 TemperatureControl control_Heater = {
