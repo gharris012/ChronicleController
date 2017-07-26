@@ -62,25 +62,25 @@ const byte DS_AMBIENT = 2;
 const byte DS_CHILLER = 3;
 DSTempSensor ds_temp_sensor[DS_SENSOR_COUNT] = {
     {
-        "04-73", // Fermenter 1
+        "Ferm1", // Fermenter 1
         {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
         1, NULL,
         INVALID_TEMPERATURE, FALSE
     },
     {
-        "05-9E", // Fermenter 2
+        "Ferm2", // Fermenter 2
         {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
         2, NULL,
         INVALID_TEMPERATURE, FALSE
     },
     {
-        "05-AD", // Ambient
+        "Amb", // Ambient
         {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
         9, NULL,
         INVALID_TEMPERATURE, FALSE
     },
     {
-        "05-C9", // Chiller
+        "Chill", // Chiller
         {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
         10, NULL,
         INVALID_TEMPERATURE, FALSE
@@ -101,13 +101,15 @@ TemperatureControl control_F1 = {
     &ds_temp_sensor[DS_FERMENTER_1],    // ds temp sensor
     NULL,                               // thermistor
     AUTO_MODE_OFF,                      // mode
-    { "F1-Act", FALSE, TRUE, WPS_F1_PUMP_SOCKET, NULL, FALSE, 0 }, // actuator - wps
+    { "F1-Act", FALSE, TRUE, WPS_F1_PUMP_SOCKET, NULL, FALSE, FALSE, 0 }, // actuator - wps
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
 
+    TRUE,                             // publish pid results
+
     5000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
-    1000, 40, 1                         // Kp, Ki, Kd
+    1000, 100, 1                         // Kp, Ki, Kd
 };
 
 const byte WPS_F2_PUMP_SOCKET = 2;
@@ -116,13 +118,15 @@ TemperatureControl control_F2 = {
     &ds_temp_sensor[DS_FERMENTER_2],    // ds temp sensor
     NULL,                               // thermistor
     AUTO_MODE_OFF,                      // mode
-    { "F2-Act", FALSE, TRUE, WPS_F2_PUMP_SOCKET, NULL, FALSE, 0 }, // actuator - wps
+    { "F2-Act", FALSE, TRUE, WPS_F2_PUMP_SOCKET, NULL, FALSE, FALSE, 0 }, // actuator - wps
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
 
+    TRUE,                             // publish pid results
+
     5000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
-    1000, 40, 1                         // Kp, Ki, Kd
+    1000, 100, 1                         // Kp, Ki, Kd
 };
 
 TemperatureControl control_Heater = {
@@ -130,10 +134,11 @@ TemperatureControl control_Heater = {
     NULL,                               // ds temp sensor
     &thermistors[THERM_HEATER],         // thermistor
     AUTO_MODE_OFF,                      // mode
-    { "H-Act", TRUE, FALSE, 8, NULL, FALSE, 0 }, // actuator - mcp
+    { "H-Act", TRUE, FALSE, 8, NULL, FALSE, FALSE, 0 }, // actuator - mcp
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
+    FALSE,                             // publish pid results
     1, 1000, 1000, 0, 0,                // min, max, window, window_start, window_end
     100, 0.15, 1000                     // Kp, Ki, Kd
 };
@@ -159,7 +164,7 @@ unsigned long int chiller_check_heater_next_time = 0;
 Chiller chiller = {
     "C-Ctrl",
     &control_Heater,
-    { "C-Fan", FALSE, TRUE, WPS_CHILLER_FAN_SOCKET, NULL, FALSE, 0 }, // actuator - wps
+    { "C-Fan", FALSE, TRUE, WPS_CHILLER_FAN_SOCKET, NULL, FALSE, FALSE, 0 }, // actuator - wps
     &ds_temp_sensor[DS_CHILLER],
     AUTO_MODE_OFF, FALSE,           // mode, state
     20,                             // target
@@ -295,6 +300,12 @@ void loop()
     if ( ds_temp_sensor_is_converting && millis() > ds_temp_sensor_convert_complete_time )
     {
         read_ds_temperatures();
+    }
+    // retry any failed WPS updates
+    {
+        verify_actuator(&chiller.fan);
+        verify_actuator(&control_F1.actuator);
+        verify_actuator(&control_F2.actuator);
     }
     if ( millis() > update_pids_next_time )
     {
@@ -766,11 +777,15 @@ void update_pid(TemperatureControl *control)
             }
 
             control->window_end = millis() + output_adjusted;
-            char buffer[50];
-            //snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %ld %ld %d", control->name, control->error, control->output, output_adjusted, millis(), control->window_end, adjustedFlag);
-            snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->output, output_adjusted, adjustedFlag);
-            ppublish(buffer);
-            LogPID.trace(buffer);
+
+            if ( control->publish_pid_results )
+            {
+                char buffer[50];
+                //snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %ld %ld %d", control->name, control->error, control->output, output_adjusted, millis(), control->window_end, adjustedFlag);
+                snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->output, output_adjusted, adjustedFlag);
+                ppublish(buffer);
+                LogPID.trace(buffer);
+            }
 
             // reset output to adjusted so PID can use it in the next computation
             control->output = output_adjusted;
@@ -813,7 +828,7 @@ void update_chiller()
         if ( f_diff > CHILLER_HIGH_DIFF_THRESHOLD )
         {
             LogChiller.trace(" high differential");
-            ppublish("Chiller High Differential: %2.0f", f_diff);
+            //ppublish("Chiller High Differential: %2.0f", f_diff);
             offset = chiller.high_target_offset;
             threshold_high = chiller.high_threshold_high;
             threshold_low = chiller.high_threshold_low;
@@ -821,7 +836,7 @@ void update_chiller()
         else
         {
             LogChiller.trace(" normal differential");
-            ppublish("Chiller Normal Differential: %2.0f", f_diff);
+            //ppublish("Chiller Normal Differential: %2.0f", f_diff);
             offset = chiller.normal_target_offset;
             threshold_high = chiller.normal_threshold_high;
             threshold_low = chiller.normal_threshold_low;
@@ -994,9 +1009,18 @@ void run_control(TemperatureControl *control)
     }
 }
 
+void verify_actuator(Actuator *actuator)
+{
+    if ( actuator->target_state != actuator->state )
+    {
+        actuate(actuator, actuator->target_state);
+    }
+}
+
 // do the actual on/off
 void actuate(Actuator *actuator, bool on)
 {
+    actuator->target_state = on;
     if ( on )
     {
         if ( actuator->state == FALSE )
@@ -1010,6 +1034,8 @@ void actuate(Actuator *actuator, bool on)
             }
             else if ( actuator->isWebPowerSwitch )
             {
+                ppublish("actuator: turning %s ON", actuator->name);
+
                 String path = WebPowerSwitch_BaseUrl;
                 path += actuator->pin;
                 path += "=ON";
@@ -1018,6 +1044,7 @@ void actuate(Actuator *actuator, bool on)
                 http.get(WebPowerSwitch_Request, WebPowerSwitch_Response, WebPowerSwitch_Headers);
                 if ( WebPowerSwitch_Response.status != 200 )
                 {
+                    ppublish("actuator: %s WPS failed: %d", actuator->name, WebPowerSwitch_Response.status);
                     LogActuator.warn(" Response Status: %d", WebPowerSwitch_Response.status);
                     LogActuator.warn(" Response Body: %s", WebPowerSwitch_Response.body.c_str());
                 }
@@ -1050,6 +1077,8 @@ void actuate(Actuator *actuator, bool on)
             }
             else if ( actuator->isWebPowerSwitch )
             {
+                ppublish("actuator: turning %s OFF", actuator->name);
+
                 String path = WebPowerSwitch_BaseUrl;
                 path += actuator->pin;
                 path += "=OFF";
@@ -1058,6 +1087,7 @@ void actuate(Actuator *actuator, bool on)
                 http.get(WebPowerSwitch_Request, WebPowerSwitch_Response, WebPowerSwitch_Headers);
                 if ( WebPowerSwitch_Response.status != 200 )
                 {
+                    ppublish("actuator: %s WPS failed: %d", actuator->name, WebPowerSwitch_Response.status);
                     LogActuator.warn(" Response Status: %d", WebPowerSwitch_Response.status);
                     LogActuator.warn(" Response Body: %s", WebPowerSwitch_Response.body.c_str());
                 }
@@ -1369,6 +1399,7 @@ void button_onClick(Button* button)
 }
 
 bool isBlynkConnected = FALSE;
+bool blynkFirstRun = TRUE;
 BLYNK_CONNECTED()
 {
     // on initial connection, sync all buttons
@@ -1381,9 +1412,18 @@ BLYNK_CONNECTED()
 }
 BLYNK_WRITE(V0)
 {
-    all_off();
-    Log.info("blynk -> turning everything off.");
-    ppublish("blynk -> turning everything off.");
+    if ( blynkFirstRun )
+    {
+        Log.info("blynk -> ignoring off (first run)");
+        ppublish("blynk -> ignoring off (first run)");
+        blynkFirstRun = FALSE;
+    }
+    else
+    {
+        all_off();
+        Log.info("blynk -> turning everything off.");
+        ppublish("blynk -> turning everything off.");
+    }
 }
 BLYNK_WRITE(V5)
 {

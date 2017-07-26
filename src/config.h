@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "r1.6"
+#define APP_VERSION "r1.7"
 
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883
@@ -66,6 +66,8 @@ typedef struct Actuator
     byte pin;
     Adafruit_MCP23017* mcp;
 
+    bool target_state; // for non-closed-loop devices, ie: WPS
+
     bool state;
     unsigned long timer_last;
 } Actuator;
@@ -86,6 +88,8 @@ typedef struct TemperatureControl
     double input;        // yes, this is redundant with tempF, if we run out of memory it can be optimized
     double output;
     double error;
+
+    bool publish_pid_results;
 
     int min;
     int max;
@@ -163,6 +167,7 @@ void update_pid(TemperatureControl *control);
 void update_chiller();
 void run_controls();
 void run_control(TemperatureControl *control);
+void verify_actuator(Actuator *actuator);
 void actuate(Actuator *actuator, bool on);
 void chiller_fan_off();
 void chiller_check_heater();
