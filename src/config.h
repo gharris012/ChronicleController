@@ -67,6 +67,7 @@ typedef struct Actuator
     Adafruit_MCP23017* mcp;
 
     bool target_state; // for non-closed-loop devices, ie: WPS
+    uint8_t blynkPin;
 
     bool state;
     unsigned long timer_last;

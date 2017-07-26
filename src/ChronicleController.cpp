@@ -101,7 +101,7 @@ TemperatureControl control_F1 = {
     &ds_temp_sensor[DS_FERMENTER_1],    // ds temp sensor
     NULL,                               // thermistor
     AUTO_MODE_OFF,                      // mode
-    { "F1-Act", FALSE, TRUE, WPS_F1_PUMP_SOCKET, NULL, FALSE, FALSE, 0 }, // actuator - wps
+    { "F1-Act", FALSE, TRUE, WPS_F1_PUMP_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
@@ -118,7 +118,7 @@ TemperatureControl control_F2 = {
     &ds_temp_sensor[DS_FERMENTER_2],    // ds temp sensor
     NULL,                               // thermistor
     AUTO_MODE_OFF,                      // mode
-    { "F2-Act", FALSE, TRUE, WPS_F2_PUMP_SOCKET, NULL, FALSE, FALSE, 0 }, // actuator - wps
+    { "F2-Act", FALSE, TRUE, WPS_F2_PUMP_SOCKET, NULL, FALSE, 19, FALSE, 0 }, // actuator - wps
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
@@ -134,7 +134,7 @@ TemperatureControl control_Heater = {
     NULL,                               // ds temp sensor
     &thermistors[THERM_HEATER],         // thermistor
     AUTO_MODE_OFF,                      // mode
-    { "H-Act", TRUE, FALSE, 8, NULL, FALSE, FALSE, 0 }, // actuator - mcp
+    { "H-Act", TRUE, FALSE, 8, NULL, FALSE, 0, FALSE, 0 }, // actuator - mcp
     INVALID_TEMPERATURE,                // tempF
     PID(1),                              // PID object - will initialize later
     65, 0, 0, 0,                        // setpoint, input, output, error
@@ -164,7 +164,7 @@ unsigned long int chiller_check_heater_next_time = 0;
 Chiller chiller = {
     "C-Ctrl",
     &control_Heater,
-    { "C-Fan", FALSE, TRUE, WPS_CHILLER_FAN_SOCKET, NULL, FALSE, FALSE, 0 }, // actuator - wps
+    { "C-Fan", FALSE, TRUE, WPS_CHILLER_FAN_SOCKET, NULL, FALSE, 12, FALSE, 0 }, // actuator - wps
     &ds_temp_sensor[DS_CHILLER],
     AUTO_MODE_OFF, FALSE,           // mode, state
     20,                             // target
@@ -525,7 +525,9 @@ void update_blynk()
     // set chill target - V11
     Blynk.virtualWrite(11, chiller.target);
     // set fan status - 1/0 - V12
-    Blynk.virtualWrite(12, ( chiller.fan.state ? 255 : 0 ));
+    Blynk.virtualWrite(chiller.fan.blynkPin, ( chiller.fan.state ? 255 : 0 ));
+    Blynk.virtualWrite(fermenters[F_FERMENTER_1].control->actuator.blynkPin, ( fermenters[F_FERMENTER_1].control->actuator.state ? 255 : 0 ));
+    Blynk.virtualWrite(fermenters[F_FERMENTER_2].control->actuator.blynkPin, ( fermenters[F_FERMENTER_2].control->actuator.state ? 255 : 0 ));
 }
 
 void tempF_for_display(float tempF, char *buffer, byte buffer_size)
