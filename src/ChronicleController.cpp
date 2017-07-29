@@ -109,7 +109,7 @@ TemperatureControl control_F1 = {
     TRUE,                             // publish pid results
 
     5000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
-    1000, 100, 1                         // Kp, Ki, Kd
+    5000, 20, 100                         // Kp, Ki, Kd
 };
 
 const byte WPS_F2_PUMP_SOCKET = 2;
@@ -126,7 +126,7 @@ TemperatureControl control_F2 = {
     TRUE,                             // publish pid results
 
     5000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
-    1000, 100, 1                         // Kp, Ki, Kd
+    5000, 20, 100                         // Kp, Ki, Kd
 };
 
 TemperatureControl control_Heater = {
