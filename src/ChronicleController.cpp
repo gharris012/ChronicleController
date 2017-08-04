@@ -155,6 +155,7 @@ Fermenter fermenters[FERMENTER_COUNT] = {
 // {{control_set_temperature}}, then mark chiller as off, and start fan-off
 const byte WPS_CHILLER_FAN_SOCKET = 3;
 const byte CHILLER_UPDATE_DELAY = 60; // in seconds ~ ish
+const byte CHILLER_DEFAULT_TARGET = 38;
 const byte CHILLER_HIGH_DIFF_THRESHOLD = 10; // if we are more than 5 degrees off either client, go into high differential mode
 const int CHILLER_FAN_POST_TIME = 60000;
 bool chiller_check_heater_status = FALSE;
@@ -167,7 +168,7 @@ Chiller chiller = {
     { "C-Fan", FALSE, TRUE, WPS_CHILLER_FAN_SOCKET, NULL, FALSE, 12, FALSE, 0 }, // actuator - wps
     &ds_temp_sensor[DS_CHILLER],
     AUTO_MODE_OFF, FALSE,           // mode, state
-    20,                             // target
+    CHILLER_DEFAULT_TARGET,         // target
     10, 5, 5,                       // normal: target offset, high threshold, low threshold
     20, 10, 10,                     // high differential: target offset, high threshold, low threshold
     25,                             // min temperature
@@ -809,18 +810,32 @@ void update_chiller()
         //  chiller target = min of both - offset, or min_temperature, whichever is higher
 
         float f_diff = 0;
-        float f_target = min(fermenters[F_FERMENTER_1].control->target,
-                                fermenters[F_FERMENTER_2].control->target);
+        float f_target = CHILLER_DEFAULT_TARGET;
 
-        if ( fermenters[F_FERMENTER_1].control->tempF != INVALID_TEMPERATURE &&
+        // 'loop' over fermenters and find lowest target, and biggest differential
+        if ( fermenters[F_FERMENTER_1].control->mode != AUTO_MODE_OFF )
+        {
+            if ( fermenters[F_FERMENTER_1].control->target < f_target )
+            {
+                f_target = fermenters[F_FERMENTER_1].control->target;
+            }
+            if ( fermenters[F_FERMENTER_1].control->tempF != INVALID_TEMPERATURE &&
                fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target > f_diff )
-        {
-            f_diff = fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target;
+            {
+                f_diff = fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target;
+            }
         }
-        if ( fermenters[F_FERMENTER_2].control->tempF != INVALID_TEMPERATURE &&
-               fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target > f_diff )
+        if ( fermenters[F_FERMENTER_2].control->mode != AUTO_MODE_OFF )
         {
-            f_diff = fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target;
+            if ( fermenters[F_FERMENTER_2].control->target < f_target )
+            {
+                f_target = fermenters[F_FERMENTER_2].control->target;
+            }
+            if ( fermenters[F_FERMENTER_2].control->tempF != INVALID_TEMPERATURE &&
+               fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target > f_diff )
+            {
+                f_diff = fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target;
+            }
         }
 
         int offset;
@@ -907,10 +922,11 @@ void update_chiller()
 
     // override : current temp < min temp -> shut it down!
     //  ... or at least start the shut down process
-    if ( chiller.dstempsensor->tempF != INVALID_TEMPERATURE && chiller.dstempsensor->tempF <= chiller.min_temperature )
+    if ( chiller.dstempsensor->tempF != INVALID_TEMPERATURE && chiller.dstempsensor->tempF <= chiller.min_temperature &&
+            ( state == TRUE || chiller.state == TRUE ) )
     {
         LogChiller.warn(" temp too low, shutting down");
-        ppublish(" temp too low, shutting down");
+        ppublish("chiller: temp too low, shutting down");
         state = FALSE;
     }
 
@@ -1019,13 +1035,18 @@ void verify_actuator(Actuator *actuator)
     }
 }
 
-// do the actual on/off
 void actuate(Actuator *actuator, bool on)
+{
+    actuate(actuator, on, FALSE);
+}
+
+// do the actual on/off
+void actuate(Actuator *actuator, bool on, bool force)
 {
     actuator->target_state = on;
     if ( on )
     {
-        if ( actuator->state == FALSE )
+        if ( actuator->state == FALSE || force )
         {
             LogActuator.info("  actuator: turning %s ON", actuator->name);
             if ( actuator->isMcp )
@@ -1068,7 +1089,7 @@ void actuate(Actuator *actuator, bool on)
     else
     {
         // when we're just starting up, force things off
-        if ( actuator->state == TRUE || actuator->timer_last == 0 )
+        if ( actuator->state == TRUE || force )
         {
             LogActuator.trace("  actuator: turning %s OFF", actuator->name);
             if ( actuator->isMcp )
@@ -1113,8 +1134,15 @@ void actuate(Actuator *actuator, bool on)
 // schedule everything to be turned off
 void all_off()
 {
+    actuate(&chiller.fan, FALSE);
+
+    //turn off the pumps immediately
     control_F1.mode = AUTO_MODE_OFF;
+    actuate(&control_F1.actuator, FALSE, TRUE);
+
     control_F2.mode = AUTO_MODE_OFF;
+    actuate(&control_F2.actuator, FALSE, TRUE);
+
     chiller.mode = AUTO_MODE_OFF;
     // update chiller immediately
     update_chiller();

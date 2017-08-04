@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "r1.7"
+#define APP_VERSION "r1.8"
 
 #define AIO_SERVER "io.adafruit.com"
 #define AIO_SERVERPORT 1883
@@ -170,6 +170,7 @@ void run_controls();
 void run_control(TemperatureControl *control);
 void verify_actuator(Actuator *actuator);
 void actuate(Actuator *actuator, bool on);
+void actuate(Actuator *actuator, bool on, bool force);
 void chiller_fan_off();
 void chiller_check_heater();
 void all_off();
