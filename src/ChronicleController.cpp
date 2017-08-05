@@ -155,7 +155,7 @@ Fermenter fermenters[FERMENTER_COUNT] = {
 // {{control_set_temperature}}, then mark chiller as off, and start fan-off
 const byte WPS_CHILLER_FAN_SOCKET = 3;
 const byte CHILLER_UPDATE_DELAY = 60; // in seconds ~ ish
-const byte CHILLER_DEFAULT_TARGET = 38;
+const byte CHILLER_DEFAULT_TARGET = 35;
 const byte CHILLER_HIGH_DIFF_THRESHOLD = 10; // if we are more than 5 degrees off either client, go into high differential mode
 const int CHILLER_FAN_POST_TIME = 60000;
 bool chiller_check_heater_status = FALSE;
@@ -810,7 +810,7 @@ void update_chiller()
         //  chiller target = min of both - offset, or min_temperature, whichever is higher
 
         float f_diff = 0;
-        float f_target = CHILLER_DEFAULT_TARGET;
+        float f_target = 100;
 
         // 'loop' over fermenters and find lowest target, and biggest differential
         if ( fermenters[F_FERMENTER_1].control->mode != AUTO_MODE_OFF )
@@ -859,7 +859,8 @@ void update_chiller()
             threshold_low = chiller.normal_threshold_low;
         }
 
-        chiller.target = max(f_target - offset, chiller.min_temperature);
+        // apply offset, then constrain between min and default
+        chiller.target = constrain(f_target - offset, chiller.min_temperature, CHILLER_DEFAULT_TARGET);
 
         LogChiller.trace(" current: %2f ; target: %2d", chiller.dstempsensor->tempF, chiller.target);
         LogChiller.trace(" threshold high: %d ; low: %d", threshold_high, threshold_low);
