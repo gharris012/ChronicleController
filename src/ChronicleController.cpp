@@ -1539,6 +1539,11 @@ void ppublish(String message, const char *value, int value2) {
     sprintf(msg, message.c_str(), value, value2);
     ppublish(msg);
 }
+void ppublish(String message, int value, int value2, int value3) {
+    char msg [50];
+    sprintf(msg, message.c_str(), value, value2, value3);
+    ppublish(msg);
+}
 void ppublish(String message, const char *value, const char *value2) {
     char msg [50];
     sprintf(msg, message.c_str(), value, value2);

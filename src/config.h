@@ -189,6 +189,7 @@ void tempF_for_display(float tempF, char buffer[], byte buffer_size);
 void ppublish(String message);
 void ppublish(String message, int value);
 void ppublish(String message, int value, unsigned long int value2);
+void ppublish(String message, int value, int value2, int value3);
 void ppublish(String message, float value);
 void ppublish(String message, const char *value);
 void ppublish(String message, const char *value, int value2);
