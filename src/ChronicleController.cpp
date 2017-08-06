@@ -779,7 +779,15 @@ void update_pid(TemperatureControl *control)
                 }
             }
 
-            control->window_end = millis() + output_adjusted;
+            // extend the max window a bit to make sure we stay on full-time
+            if ( output_adjusted == control->max )
+            {
+                control->window_end = millis() + output_adjusted + 5000;
+            }
+            else
+            {
+                control->window_end = millis() + output_adjusted;
+            }
 
             if ( control->publish_pid_results )
             {
@@ -865,7 +873,7 @@ void update_chiller()
         LogChiller.trace(" current: %2f ; target: %2d", chiller.dstempsensor->tempF, chiller.target);
         LogChiller.trace(" threshold high: %d ; low: %d", threshold_high, threshold_low);
         LogChiller.trace(" on temp: %2d ; off temp: %2d", chiller.target + threshold_high, chiller.target - threshold_low );
-        ppublish("Chiller On Temp: %d ; Off Temp: %d", chiller.target + threshold_high, chiller.target - threshold_low );
+        ppublish("Chiller Target: %d < %d < %d", chiller.target + threshold_high, (int) chiller.target, chiller.target - threshold_low );
 
         // if we're off, kick on when we get over target+threshold
         // if we're on, stay on until we are below target-threshold
