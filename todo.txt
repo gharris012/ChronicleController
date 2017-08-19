@@ -19,13 +19,23 @@ particle flash $PARTICLE_DEVICE ../projects/ChronicleController/target/Chronicle
 particle subscribe mine $PARTICLE_DEVICE
 
 == [ Todo ] ==
- if the temp is more than X below, use 0 (ignore pid output) +PID
- if the temp is more than Y above, use 100 (ignore pid output) +PID
-
+v1.9
  add notification for device reset
  add notification for over/under temp - but only after it has reached target
  add notification for repeated WPS failures
 
+v2.0
+ redbear duo w/ tilt reading
+ add gravity to blynk
+ add notification for long tilt disconnect
+
+v3.0
+ add webui
+ add fermentation profiles
+
+v4.0
+ add more configuration via webui (wps ports, ds addresses, etc)
+  save configuration to eeprom
 
 == [ Blynk Pinouts ] ==
 V12 Fan
