@@ -34,7 +34,6 @@ typedef struct DSTempSensor
     char name[10];
     uint8_t addr[8];
     uint8_t blynkPin;
-    Adafruit_MQTT_Publish *aioFeed;
 
     float tempF;
 
@@ -50,7 +49,6 @@ typedef struct Thermistor
     float tempF;
 
     uint8_t blynkPin;
-    Adafruit_MQTT_Publish *aioFeed;
 } Thermistor;
 
 typedef struct Actuator
@@ -170,7 +168,6 @@ void chiller_fan_off();
 void chiller_check_heater();
 void all_off();
 void update_display();
-void update_aio();
 void update_blynk();
 void check_memory();
 
@@ -179,7 +176,6 @@ void mode_for_display(bool state, float tempF, char *buffer, byte buffer_size);
 void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size);
 void mode_as_string(byte mode, char *buffer, byte buffer_size);
 void tempF_for_display(float tempF, char buffer[], byte buffer_size);
-
 
 void ppublish(String message);
 void ppublish(String message, int value);
