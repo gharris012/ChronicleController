@@ -52,26 +52,38 @@ DSTempSensor ds_temp_sensor[DS_SENSOR_COUNT] = {
     {
         "Ferm1", // Fermenter 1
         {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
-        1, NULL,
-        INVALID_TEMPERATURE, FALSE
+        1,
+        INVALID_TEMPERATURE,
+        INVALID_TEMPERATURE,
+        0,
+        FALSE
     },
     {
         "Ferm2", // Fermenter 2
         {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
-        2, NULL,
-        INVALID_TEMPERATURE, FALSE
+        2,
+        INVALID_TEMPERATURE,
+        INVALID_TEMPERATURE,
+        0,
+        FALSE
     },
     {
         "Amb", // Ambient
         {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
-        9, NULL,
-        INVALID_TEMPERATURE, FALSE
+        9,
+        INVALID_TEMPERATURE,
+        INVALID_TEMPERATURE,
+        0,
+        FALSE
     },
     {
         "Chill", // Chiller
         {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
-        10, NULL,
-        INVALID_TEMPERATURE, FALSE
+        10,
+        INVALID_TEMPERATURE,
+        INVALID_TEMPERATURE,
+        0,
+        FALSE
     }
 };
 
@@ -80,7 +92,7 @@ const byte THERM_HEATER = 0;
 const byte THERM_HEATER_PIN = A2;
 const byte BLYNK_HEATER_VPIN = 4;
 Thermistor thermistors[THERMISTOR_COUNT] = {
-    { "A/C TStat", THERM_HEATER_PIN, INVALID_TEMPERATURE, BLYNK_HEATER_VPIN, NULL }
+    { "A/C TStat", THERM_HEATER_PIN, INVALID_TEMPERATURE, BLYNK_HEATER_VPIN }
 };
 
 const byte WPS_F1_PUMP_SOCKET = 1;
@@ -1460,45 +1472,13 @@ BLYNK_WRITE(V13)
     update_chiller();
 }
 
-void ppublish(String message) {
-    char msg [50];
-    sprintf(msg, message.c_str());
-    Particle.publish("chronicle", msg);
-    //Serial.println(message);
-}
-void ppublish(String message, int value) {
-    char msg [50];
-    sprintf(msg, message.c_str(), value);
-    ppublish(msg);
-}
-void ppublish(String message, float value) {
-    char msg [50];
-    sprintf(msg, message.c_str(), value);
-    ppublish(msg);
-}
-void ppublish(String message, const char *value) {
-    char msg [50];
-    sprintf(msg, message.c_str(), value);
-    ppublish(msg);
-}
-void ppublish(String message, int value, unsigned long int value2)
+void ppublish(String message, ...)
 {
-    char msg [50];
-    sprintf(msg, message.c_str(), value, value2);
-    ppublish(msg);
-}
-void ppublish(String message, const char *value, int value2) {
-    char msg [50];
-    sprintf(msg, message.c_str(), value, value2);
-    ppublish(msg);
-}
-void ppublish(String message, int value, int value2, int value3) {
-    char msg [50];
-    sprintf(msg, message.c_str(), value, value2, value3);
-    ppublish(msg);
-}
-void ppublish(String message, const char *value, const char *value2) {
-    char msg [50];
-    sprintf(msg, message.c_str(), value, value2);
-    ppublish(msg);
+    char buffer[50];
+    va_list args;
+    va_start(args, message);
+    vsnprintf(buffer, 50, message.c_str(), args);
+    Particle.publish("chronicle", buffer);
+
+    va_end(args);
 }
