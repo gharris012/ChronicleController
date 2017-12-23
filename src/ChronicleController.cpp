@@ -5,8 +5,6 @@
 #include "lib/blynk.h"
 //#define BLYNK_PRINT Serial
 
-//#define AIO_ENABLE
-
 Adafruit_MCP23017 mcp;
 byte achState = LOW;
 Adafruit_SSD1306 display;
@@ -26,16 +24,6 @@ http_header_t WebPowerSwitch_Headers[] = {
 http_request_t WebPowerSwitch_Request;
 http_response_t WebPowerSwitch_Response;
 const char WebPowerSwitch_BaseUrl[] = "/outlet?";
-
-#ifdef AIO_ENABLE
-    TCPClient TheClient;
-    Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY);
-    Adafruit_MQTT_Publish aio_pid_setpoint = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-setpoint");
-    Adafruit_MQTT_Publish aio_pid_current = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-current");
-    Adafruit_MQTT_Publish aio_pid_output = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-output");
-    Adafruit_MQTT_Publish aio_pid_error = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-error");
-    Adafruit_MQTT_Publish aio_pid_state = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pid-state");
-#endif
 
 SerialLogHandler logHandler(LOG_LEVEL_WARN, {
     { "app", LOG_LEVEL_INFO },
@@ -250,15 +238,6 @@ void setup() {
     Log.info("setting up blynk");
     Blynk.begin(BLYNK_KEY);
 
-    #ifdef AIO_ENABLE
-        Log.info("connecting to AIO");
-        int8_t aio_state = mqtt.connect();
-        if ( aio_state != 0 )
-        {
-            Log.warn("Unable to connect to aio: %s", mqtt.connectErrorString(aio_state));
-        }
-    #endif
-
     // initialize with the I2C addr 0x3C (for the diy display)
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
@@ -337,27 +316,6 @@ void loop()
         update_blynk_next_time += update_blynk_delay;
     }
 
-    /*
-    update_aio();
-    */
-
-/*
-
-                        #ifdef AIO_ENABLE
-                            if ( dsTemp[i].aioFeed )
-                            {
-                                if ( mqtt.connected() )
-                                {
-                                    Log.info(" updating aio feed");
-                                    dsTemp[i].aioFeed->publish(therm);
-                                }
-                                else
-                                {
-                                    Log.warn(" mqtt disconnected");
-                                }
-                            }
-                        #endif
-    */
 }
 
 void check_memory()
@@ -427,11 +385,6 @@ void update_display()
     tempF_for_display(chiller.dstempsensor->tempF, fbuf, fbuf_size);
     snprintf(buffer, sizeof(buffer), "C %s %3s", fbuf, mbuf);
     display_line(3, buffer, FALSE, TRUE);
-}
-
-void update_aio()
-{
-
 }
 
 int blynk_pid_f1_last_report = 0;

@@ -1,10 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "r1.8"
-
-#define AIO_SERVER "io.adafruit.com"
-#define AIO_SERVERPORT 1883
+#define APP_VERSION "d00"
 
 // A/C Thermostat Heater pin
 #define OWNPIN D6
@@ -30,8 +27,6 @@
 #include "lib/Adafruit_MCP23017.h"
 #include "lib/OneWire.h"
 #include "lib/pid.h"
-#include "lib/Adafruit_MQTT_SPARK.h"
-#include "lib/Adafruit_MQTT.h"
 #include "lib/httpclient2.h"
 
 typedef struct DSTempSensor
