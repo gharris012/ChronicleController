@@ -2,7 +2,7 @@
 
 #include "config.h"
 #include "keys.h"
-#include "lib/blynk.h"
+#include "blynk.h"
 //#define BLYNK_PRINT Serial
 
 Adafruit_MCP23017 mcp;
@@ -11,7 +11,7 @@ Adafruit_SSD1306 display;
 OneWire own(OWNPIN);
 HttpClient http;
 
-IPAddress WebPowerSwitch_IPAddress = {192,168,1,97};
+IPAddress WebPowerSwitch_IPAddress(192,168,1,97);
 int WebPowerSwitch_Port = 80;
 
 http_header_t WebPowerSwitch_Headers[] = {
@@ -95,52 +95,65 @@ Thermistor thermistors[THERMISTOR_COUNT] = {
     { "A/C TStat", THERM_HEATER_PIN, INVALID_TEMPERATURE, BLYNK_HEATER_VPIN }
 };
 
-const byte WPS_F1_PUMP_SOCKET = 1;
+const byte WPS_F1_CHILL_SOCKET = 1;
+const byte WPS_F1_HEAT_SOCKET = 3;
 TemperatureControl control_F1 = {
     "F1-Ctrl",
     &ds_temp_sensor[DS_FERMENTER_1],    // ds temp sensor
     NULL,                               // thermistor
     AUTO_MODE_OFF,                      // mode
-    { "F1-Act", FALSE, TRUE, WPS_F1_PUMP_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
-    INVALID_TEMPERATURE,                // tempF
-    PID(1),                              // PID object - will initialize later
-    65, 0, 0, 0,                        // setpoint, input, output, error
+	{ "F1-Heat", FALSE, TRUE, WPS_F1_HEAT_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
+    { "F1-Chill", FALSE, TRUE, WPS_F1_CHILL_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
+    0,                // last_action
 
-    TRUE,                             // publish pid results
+	INVALID_TEMPERATURE,			  // tempf
+	65,								  // target
+	0,								  // error
+	2,								  // hysterisis
 
-    5000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
-    5000, 20, 100                         // Kp, Ki, Kd
+	{ PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0 }, // heat-pid
+	{ PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0 }  // chill-pid
 };
 
-const byte WPS_F2_PUMP_SOCKET = 2;
+const byte WPS_F2_CHILL_SOCKET = 2;
+const byte WPS_F2_HEAT_SOCKET = 4;
 TemperatureControl control_F2 = {
     "F2-Ctrl",
     &ds_temp_sensor[DS_FERMENTER_2],    // ds temp sensor
     NULL,                               // thermistor
-    AUTO_MODE_OFF,                      // mode
-    { "F2-Act", FALSE, TRUE, WPS_F2_PUMP_SOCKET, NULL, FALSE, 19, FALSE, 0 }, // actuator - wps
-    INVALID_TEMPERATURE,                // tempF
-    PID(1),                              // PID object - will initialize later
-    65, 0, 0, 0,                        // setpoint, input, output, error
+	AUTO_MODE_OFF,                      // mode
+	{ "F2-Heat", FALSE, TRUE, WPS_F2_HEAT_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
+	{ "F2-Chill", FALSE, TRUE, WPS_F2_CHILL_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
+	0,                // last_action
 
-    TRUE,                             // publish pid results
+	INVALID_TEMPERATURE,			  // tempf
+	65,								  // target
+	0,								  // error
+	2,								  // hysterisis
 
-    5000, 60000, 60000, 0, 0,          // min, max, window, window_start, window_end
-    5000, 20, 100                         // Kp, Ki, Kd
+	{ PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0 }, // heat-pid
+	{ PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0 }  // chill-pid
 };
 
 TemperatureControl control_Heater = {
     "H-Ctrl",
-    NULL,                               // ds temp sensor
+	
+	NULL,                               // ds temp sensor
     &thermistors[THERM_HEATER],         // thermistor
     AUTO_MODE_OFF,                      // mode
+
     { "H-Act", TRUE, FALSE, 8, NULL, FALSE, 0, FALSE, 0 }, // actuator - mcp
-    INVALID_TEMPERATURE,                // tempF
-    PID(1),                              // PID object - will initialize later
-    65, 0, 0, 0,                        // setpoint, input, output, error
-    FALSE,                             // publish pid results
-    1, 1000, 1000, 0, 0,                // min, max, window, window_start, window_end
-    100, 0.15, 1000                     // Kp, Ki, Kd
+	{},
+	
+	0,
+    
+	INVALID_TEMPERATURE,                // tempF
+	65,
+	0,
+	0,
+	
+	{ PID(), 100, 0.15f, 1000, 0, 0, 0, FALSE, 1, 1000, 1000, 0, 0 },
+	{}
 };
 
 const byte FERMENTER_COUNT = 2;
@@ -153,7 +166,7 @@ Fermenter fermenters[FERMENTER_COUNT] = {
 
 // after the chiller is turned off, keep checking heater until it gets below
 // {{control_set_temperature}}, then mark chiller as off, and start fan-off
-const byte WPS_CHILLER_FAN_SOCKET = 3;
+const byte WPS_CHILLER_FAN_SOCKET = 5;
 const byte CHILLER_UPDATE_DELAY = 60; // in seconds ~ ish
 const byte CHILLER_DEFAULT_TARGET = 35;
 const byte CHILLER_HIGH_DIFF_THRESHOLD = 10; // if we are more than 5 degrees off either client, go into high differential mode
@@ -217,9 +230,9 @@ void setup() {
     ppublish("Starting up App Version: %s", (const char*)APP_VERSION);
 
     Log.info("setting up Heater pin");
-    mcp.begin();
-    mcp.pinMode(control_Heater.actuator.pin, OUTPUT);
-    mcp.digitalWrite(control_Heater.actuator.pin, LOW);
+	mcp.begin();
+    mcp.pinMode(control_Heater.heater.pin, OUTPUT);
+    mcp.digitalWrite(control_Heater.heater.pin, LOW);
     pinMode(control_Heater.thermistor->pin, INPUT);
 
     WebPowerSwitch_Request.ip = WebPowerSwitch_IPAddress;
@@ -296,8 +309,10 @@ void loop()
     // retry any failed WPS updates
     {
         verify_actuator(&chiller.fan);
-        verify_actuator(&control_F1.actuator);
-        verify_actuator(&control_F2.actuator);
+        verify_actuator(&control_F1.heater);
+		verify_actuator(&control_F1.chiller);
+		verify_actuator(&control_F2.heater);
+        verify_actuator(&control_F2.chiller);
     }
     if ( millis() > update_pids_next_time )
     {
@@ -448,7 +463,7 @@ void update_blynk()
     else if ( fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_PID )
     {
         // F1 PID Output as % of window
-        blynkReport = ( ( fermenters[F_FERMENTER_1].control->output / fermenters[F_FERMENTER_1].control->window ) * 100 );
+        blynkReport = ( ( fermenters[F_FERMENTER_1].control->chill_pid.output / fermenters[F_FERMENTER_1].control->chill_pid.window ) * 100 );
     }
     else
     {
@@ -473,7 +488,7 @@ void update_blynk()
     else if ( fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_PID )
     {
         // F2 PID Output as % of window
-        blynkReport = ( ( fermenters[F_FERMENTER_2].control->output / fermenters[F_FERMENTER_2].control->window ) * 100 );
+        blynkReport = ( ( fermenters[F_FERMENTER_2].control->chill_pid.output / fermenters[F_FERMENTER_2].control->chill_pid.window ) * 100 );
     }
     else
     {
@@ -492,11 +507,11 @@ void update_blynk()
     Blynk.virtualWrite(11, chiller.target);
     // set fan status - 1/0 - V12
     Blynk.virtualWrite(chiller.fan.blynkPin, ( chiller.fan.state ? 255 : 0 ));
-    Blynk.virtualWrite(fermenters[F_FERMENTER_1].control->actuator.blynkPin, ( fermenters[F_FERMENTER_1].control->actuator.state ? 255 : 0 ));
-    Blynk.virtualWrite(fermenters[F_FERMENTER_2].control->actuator.blynkPin, ( fermenters[F_FERMENTER_2].control->actuator.state ? 255 : 0 ));
+    Blynk.virtualWrite(fermenters[F_FERMENTER_1].control->chiller.blynkPin, ( fermenters[F_FERMENTER_1].control->chiller.state ? 255 : 0 ));
+    Blynk.virtualWrite(fermenters[F_FERMENTER_2].control->chiller.blynkPin, ( fermenters[F_FERMENTER_2].control->chiller.state ? 255 : 0 ));
 }
 
-void tempF_for_display(float tempF, char *buffer, byte buffer_size)
+void tempF_for_display(float tempF, char buffer[], byte buffer_size)
 {
     if ( tempF == INVALID_TEMPERATURE )
     {
@@ -642,23 +657,23 @@ void display_line(byte line, char *message, bool clear, bool flush)
 
 void setup_pids()
 {
-    control_F1.pid.init(&control_F1.input, &control_F1.output, &control_F1.target,
-                        control_F1.Kp, control_F1.Ki, control_F1.Kd, PID::REVERSE);
-    control_F1.pid.SetOutputLimits(0, control_F1.max);
-    control_F1.pid.SetMode(PID::AUTOMATIC);
-    control_F1.pid.SetSampleTime(control_F1.window);
+    control_F1.chill_pid.pid.Init(&control_F1.tempF, &control_F1.chill_pid.output, &control_F1.target,
+                        control_F1.chill_pid.Kp, control_F1.chill_pid.Ki, control_F1.chill_pid.Kd, 0, 1);
+    control_F1.chill_pid.pid.SetOutputLimits(0, control_F1.chill_pid.max);
+    control_F1.chill_pid.pid.SetMode(1);
+    control_F1.chill_pid.pid.SetSampleTime(control_F1.chill_pid.window);
 
-    control_F2.pid.init(&control_F2.input, &control_F2.output, &control_F2.target,
-                        control_F2.Kp, control_F2.Ki, control_F2.Kd, PID::REVERSE);
-    control_F2.pid.SetOutputLimits(0, control_F2.max);
-    control_F2.pid.SetMode(PID::AUTOMATIC);
-    control_F2.pid.SetSampleTime(control_F2.window);
+    control_F2.chill_pid.pid.Init(&control_F2.tempF, &control_F2.chill_pid.output, &control_F2.target,
+                        control_F2.chill_pid.Kp, control_F2.chill_pid.Ki, control_F2.chill_pid.Kd, 0, 1);
+    control_F2.chill_pid.pid.SetOutputLimits(0, control_F2.chill_pid.max);
+    control_F2.chill_pid.pid.SetMode(1);
+    control_F2.chill_pid.pid.SetSampleTime(control_F2.chill_pid.window);
 
-    control_Heater.pid.init(&control_Heater.input, &control_Heater.output, &control_Heater.target,
-                        control_Heater.Kp, control_Heater.Ki, control_Heater.Kd, PID::DIRECT);
-    control_Heater.pid.SetOutputLimits(0, control_Heater.max);
-    control_Heater.pid.SetMode(PID::AUTOMATIC);
-    control_Heater.pid.SetSampleTime(control_Heater.window);
+    control_Heater.heat_pid.pid.Init(&control_Heater.tempF, &control_Heater.heat_pid.output, &control_Heater.target,
+                        control_Heater.heat_pid.Kp, control_Heater.heat_pid.Ki, control_Heater.heat_pid.Kd, 1, 0);
+    control_Heater.heat_pid.pid.SetOutputLimits(0, control_Heater.heat_pid.max);
+    control_Heater.heat_pid.pid.SetMode(1);
+    control_Heater.heat_pid.pid.SetSampleTime(control_Heater.heat_pid.window);
 }
 
 void update_pids()
@@ -699,12 +714,11 @@ void update_pid(TemperatureControl *control)
 
     if ( control->tempF != INVALID_TEMPERATURE && control->mode == AUTO_MODE_PID )
     {
-        control->input = control->tempF;
-        control->error = control->target - control->input;
+        control->error = control->target - control->tempF;
         int adjustedFlag = 0;
-        if ( control->pid.Compute() )
+        if ( control->chill_pid.pid.Compute() )
         {
-            output_adjusted = control->output;
+            output_adjusted = control->chill_pid.output;
             if ( output_adjusted < 0 )
             {
                 output_adjusted = 0;
@@ -712,13 +726,13 @@ void update_pid(TemperatureControl *control)
             }
             // returns true when a new computation has been done
             // ie: new window
-            control->window_start = millis();
-            if ( control->min > output_adjusted )
+            control->chill_pid.window_start = millis();
+            if ( control->chill_pid.min > output_adjusted )
             {
                 // set window to min if output is more than half of min, otherwise 0
-                if ( ( control->min / 2 ) < output_adjusted )
+                if ( ( control->chill_pid.min / 2 ) < output_adjusted )
                 {
-                    output_adjusted = control->min;
+                    output_adjusted = control->chill_pid.min;
                     adjustedFlag |= 2;
                 }
                 else
@@ -729,42 +743,44 @@ void update_pid(TemperatureControl *control)
             }
             // enforce window_min for off-time as well
             // -- leave window_min at the end
-            else if ( output_adjusted > ( control->max - control->min ) )
+            else if ( output_adjusted > ( control->chill_pid.max - control->chill_pid.min ) )
             {
                 // round up
-                if ( output_adjusted > ( control->max - ( control->min / 2 ) ) )
+                if ( output_adjusted > ( control->chill_pid.max - ( control->chill_pid.min / 2 ) ) )
                 {
-                    output_adjusted = control->max;
+                    output_adjusted = control->chill_pid.max;
                     adjustedFlag |= 8;
                 }
                 else
                 {
-                    output_adjusted =  control->max - control->min;
+                    output_adjusted =  control->chill_pid.max - control->chill_pid.min;
                     adjustedFlag |= 16;
                 }
             }
 
             // extend the max window a bit to make sure we stay on full-time
-            if ( output_adjusted == control->max )
+            if ( output_adjusted == control->chill_pid.max )
             {
-                control->window_end = millis() + output_adjusted + 5000;
+                control->chill_pid.window_end = millis() + output_adjusted + 5000;
             }
             else
             {
-                control->window_end = millis() + output_adjusted;
+                control->chill_pid.window_end = millis() + output_adjusted;
             }
 
-            if ( control->publish_pid_results )
+            if ( control->chill_pid.publish_results )
             {
                 char buffer[50];
                 //snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %ld %ld %d", control->name, control->error, control->output, output_adjusted, millis(), control->window_end, adjustedFlag);
-                snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->output, output_adjusted, adjustedFlag);
+                snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->chill_pid.output, output_adjusted, adjustedFlag);
                 ppublish(buffer);
                 LogPID.trace(buffer);
             }
 
             // reset output to adjusted so PID can use it in the next computation
-            control->output = output_adjusted;
+			control->chill_pid.output_original = control->chill_pid.output;
+            control->chill_pid.output = output_adjusted;
+			control->chill_pid.adjustedFlag = adjustedFlag;
         }
     }
 }
@@ -978,22 +994,22 @@ void run_control(TemperatureControl *control)
 {
     if ( control->mode == AUTO_MODE_PID )
     {
-        if ( millis() >= control->window_start && millis() <= control->window_end )
+        if ( millis() >= control->chill_pid.window_start && millis() <= control->chill_pid.window_end )
         {
-            actuate(&control->actuator, TRUE);
+            actuate(&control->chiller, TRUE);
         }
         else
         {
-            actuate(&control->actuator, FALSE);
+            actuate(&control->chiller, FALSE);
         }
     }
     else if ( control->mode == AUTO_MODE_ON )
     {
-        actuate(&control->actuator, TRUE);
+        actuate(&control->chiller, TRUE);
     }
     else if ( control->mode == AUTO_MODE_OFF )
     {
-        actuate(&control->actuator, FALSE);
+        actuate(&control->chiller, FALSE);
     }
     else
     {
@@ -1112,10 +1128,10 @@ void all_off()
 
     //turn off the pumps immediately
     control_F1.mode = AUTO_MODE_OFF;
-    actuate(&control_F1.actuator, FALSE, TRUE);
+    actuate(&control_F1.chiller, FALSE, TRUE);
 
     control_F2.mode = AUTO_MODE_OFF;
-    actuate(&control_F2.actuator, FALSE, TRUE);
+    actuate(&control_F2.chiller, FALSE, TRUE);
 
     chiller.mode = AUTO_MODE_OFF;
     // update chiller immediately

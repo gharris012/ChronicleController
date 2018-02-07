@@ -12,24 +12,33 @@
 #define AUTO_MODE_OFF 2
 #define AUTO_MODE_PID 3
 #define AUTO_MODE_AUTO 4
+#define AUTO_MODE_CHILL 5
+#define AUTO_MODE_HEAT 6
 #define MENU_ON AUTO_MODE_ON
 #define MENU_OFF AUTO_MODE_OFF
-#define MENU_PID AUTO_MODE_PID       // PID control
-#define MENU_AUTO AUTO_MODE_AUTO     // Dumb auto : setpoint, threshold min/max
-#define CONTROL_HIGH_DIFFERENTIAL 10 // error > DIFFERENTIAL -> high differential
+#define MENU_PID AUTO_MODE_PID        // PID control
+#define MENU_AUTO AUTO_MODE_AUTO      // Dumb auto : setpoint, threshold min/max
+#define MENU_PCHILL AUTO_MODE_CHILL   // PID - Chiller only
+#define MENU_PHEAT AUTO_MODE_HEAT     // PID - Heater only
+#define CONTROL_HIGH_DIFFERENTIAL 10  // error > DIFFERENTIAL -> high differential
+#define ACTION_NONE 0
+#define ACITON_CHILL 1
+#define ACITON_HEAT -1
 #define BUTTON_COUNT 6
+#define NULL 0
 
 #include "application.h"
+#include <stdlib.h>
 #include <math.h>
 #include "lib/Button.h"
 #include "lib/Adafruit_GFX.h"
 #include "lib/Adafruit_SSD1306.h"
 #include "lib/Adafruit_MCP23017.h"
 #include "lib/OneWire.h"
-#include "lib/pid.h"
+#include "lib/PID_v1.h"
 #include "lib/httpclient2.h"
 
-typedef struct DSTempSensor
+struct DSTempSensor
 {
     char name[10];
     uint8_t addr[8];
@@ -40,18 +49,18 @@ typedef struct DSTempSensor
     float last_tempF;
     int last_valid_read;
     bool present;
-} DSTempSensor;
+};
 
-typedef struct Thermistor
+struct Thermistor
 {
     char name[10];
     byte pin;
     float tempF;
 
     uint8_t blynkPin;
-} Thermistor;
+};
 
-typedef struct Actuator
+struct Actuator
 {
     char name[10];
     bool isMcp;
@@ -64,39 +73,50 @@ typedef struct Actuator
 
     bool state;
     unsigned long timer_last;
-} Actuator;
+};
 
-typedef struct TemperatureControl
+struct PIDControl
 {
-    char name[10];
-
-    DSTempSensor *dstempsensor;
-    Thermistor *thermistor;
-    byte mode; // 1 - ON ; 2 - OFF ; 3 - AUTO
-    Actuator actuator;
-
-    double tempF;
-
     PID pid;
-    double target;
-    double input;        // yes, this is redundant with tempF, if we run out of memory it can be optimized
-    double output;
-    double error;
+    double Kp;
+    double Ki;
+    double Kd;
 
-    bool publish_pid_results;
+	double output;
+	double output_original;
+	int adjustedFlag;
+
+    bool publish_results;
 
     int min;
     int max;
     int window;
     unsigned long window_start;
     unsigned long window_end;
+};
 
-    double Kp;
-    double Ki;
-    double Kd;
-} TemperatureControl;
+struct TemperatureControl
+{
+    char name[10];
 
-typedef struct Chiller
+    DSTempSensor *dstempsensor;
+    Thermistor *thermistor;
+    byte mode; // 1 - ON ; 2 - OFF ; 3 - AUTO
+    Actuator heater;
+    Actuator chiller;
+
+    int8_t last_action; // 0 none, 1 - chill, -1 - heat
+
+    double tempF;
+    double target;
+    double error;
+    double hysterisis;
+
+    PIDControl heat_pid;
+    PIDControl chill_pid;
+};
+
+struct Chiller
 {
     char name[10];
 
@@ -139,13 +159,13 @@ typedef struct Chiller
                                     // the chiller turns off
 
     unsigned long timer_last;
-} Chiller;
+};
 
-typedef struct Fermenter
+struct Fermenter
 {
     char name[10];
     TemperatureControl *control;
-} Fermenter;
+};
 
 float readTempC(DSTempSensor *dstemp);
 float readTempC(Thermistor *thermistor);
