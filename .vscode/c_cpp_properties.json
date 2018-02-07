@@ -1,25 +1,78 @@
 {
     "configurations": [
         {
-            "name": "Win32",
+            "name": "arm",
             "includePath": [
                 "${workspaceRoot}",
-                    "${workspaceRoot}\\src\\lib",
-                    "${workspaceRoot}\\src"
+                "${workspaceRoot}/src",
+                "${workspaceRoot}/src/lib",
+                "${workspaceRoot}/src/Blynk",
+                "c:/program files (x86)/gnu tools arm embedded/5.3 2016q1/lib/gcc/arm-none-eabi/5.3.1/include",
+                "c:/program files (x86)/gnu tools arm embedded/5.3 2016q1/lib/gcc/arm-none-eabi/5.3.1/include-fixed",
+                "c:/program files (x86)/gnu tools arm embedded/5.3 2016q1/arm-none-eabi/include",
+                "c:/Code/src/particle",
+                "C:/Code/src/particle/communication/lib/mbedtls/include",
+                "C:/Code/src/particle/communication/lib/mbedtls/include/mbedtls",
+                "C:/Code/src/particle/communication/lib/tropicssl/include",
+                "C:/Code/src/particle/communication/lib/tropicssl/include/tropicssl",
+                "C:/Code/src/particle/dynalib/inc",
+                "C:/Code/src/particle/hal/inc",
+                "C:/Code/src/particle/hal/src/electron/rtos/FreeRTOSv8.2.2/FreeRTOS/Source/include",
+                "C:/Code/src/particle/hal/src/photon",
+                "C:/Code/src/particle/hal/src/photon/include",
+                "C:/Code/src/particle/hal/src/photon/wiced/network/LwIP/ver1.4.0.rc1/src/include",
+                "C:/Code/src/particle/hal/src/photon/wiced/network/LwIP/ver1.4.0.rc1/src/include/ipv4",
+                "C:/Code/src/particle/hal/src/photon/wiced/network/LwIP/ver1.4.0.rc1/src/include/ipv6",
+                "C:/Code/src/particle/hal/src/photon/wiced/network/LwIP/ver1.4.0.rc1/src/include/lwip",
+                "C:/Code/src/particle/hal/src/photon/wiced/network/LwIP/ver1.4.0.rc1/src/include/netif",
+                "C:/Code/src/particle/hal/src/photon/wiced/network/LwIP/ver1.4.0.rc1/src/include/ipv4/lwip",
+                "C:/Code/src/particle/hal/src/photon/wiced/network/LwIP/ver1.4.0.rc1/src/include/ipv6/lwip",
+                "C:/Code/src/particle/hal/src/photon/wiced/platform/include",
+                "C:/Code/src/particle/hal/src/photon/wiced/platform/MCU/STM32F2xx/peripherals/libraries/inc",
+                "C:/Code/src/particle/hal/src/photon/wiced/RTOS/FreeRTOS/ver7.5.2/Source/include",
+                "C:/Code/src/particle/hal/src/photon/wiced/security/BESL/include",
+                "C:/Code/src/particle/hal/src/photon/wiced/WWD/include",
+                "C:/Code/src/particle/hal/src/photon/wiced/WWD/include/network",
+                "C:/Code/src/particle/hal/src/photon/wiced/WWD/include/platform",
+                "C:/Code/src/particle/hal/src/photon/wiced/WWD/include/RTOS",
+                "C:/Code/src/particle/modules/electron/system-part2/inc",
+                "C:/Code/src/particle/modules/photon/system-part1/inc",
+                "C:/Code/src/particle/modules/photon/user-part/inc",
+                "C:/Code/src/particle/modules/shared/stm32f2xx/inc",
+                "C:/Code/src/particle/platform/MCU/gcc/inc",
+                "C:/Code/src/particle/platform/MCU/newhal-mcu/inc",
+                "C:/Code/src/particle/platform/MCU/shared/STM32/inc",
+                "C:/Code/src/particle/platform/MCU/STM32F1xx/SPARK_Firmware_Driver/inc",
+                "C:/Code/src/particle/platform/MCU/STM32F1xx/STM32_StdPeriph_Driver/inc",
+                "C:/Code/src/particle/platform/MCU/STM32F1xx/STM32_USB_Device_Driver/inc",
+                "C:/Code/src/particle/platform/MCU/STM32F2xx/SPARK_Firmware_Driver/inc",
+                "C:/Code/src/particle/platform/MCU/STM32F2xx/STM32_StdPeriph_Driver/inc",
+                "C:/Code/src/particle/platform/MCU/STM32F2xx/STM32_USB_Device_Driver/inc",
+                "C:/Code/src/particle/platform/MCU/STM32F2xx/STM32_USB_Host_Driver/inc",
+                "C:/Code/src/particle/platform/MCU/STM32F2xx/STM32_USB_OTG_Driver/inc",
+                "C:/Code/src/particle/platform/shared/inc",
+                "C:/Code/src/particle/rt-dynalib/inc",
+                "C:/Code/src/particle/services/inc",
+                "C:/Code/src/particle/system/inc",
+                "C:/Code/src/particle/user/inc",
+                "C:/Code/src/particle/wiring/inc",
+                "C:/Code/src/particle/wiring/inc/avr",
+                "C:/Program Files (x86)/GNU Tools ARM Embedded/5.3 2016q1/arm-none-eabi/include/c++/5.3.1",
+                "C:/Program Files (x86)/GNU Tools ARM Embedded/5.3 2016q1/arm-none-eabi/include/c++/5.3.1/arm-none-eabi",
+                "C:/Code/src/particle/hal/shared",
+                "C:/Code/src/particle/communication/src",
+                "C:/Code/src/particle/hal/src/newhal"
             ],
-            "defines": [
-                "_DEBUG",
-                "UNICODE"
-            ],
+            "defines": [],
             "intelliSenseMode": "clang-x64",
             "browse": {
                 "path": [
                     "${workspaceRoot}",
-                    "${workspaceRoot}\\src\\lib",
-                    "${workspaceRoot}\\src"
+                    "c:/program files (x86)/gnu tools arm embedded/5.3 2016q1/",
+                    "C:/Code/src/particle"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
-                "databaseFilename": ""
+                "databaseFilename": "${workspaceRoot}/.vscode/browse.vc.db"
             }
         }
     ],
