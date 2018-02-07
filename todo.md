@@ -45,3 +45,23 @@ control->
 (threshold=2)
 set + threshold => start chiller PID
 set - threshold => start heater PID
+
+# VS Code Includes and defines
+see  
+http://shadetail.com/blog/using-visual-studio-code-for-arm-development-include-paths/  
+http://shadetail.com/blog/using-visual-studio-code-for-arm-development-defines/
+
+echo | arm-none-eabi-gcc -dM -E - > gcc-defines.txt
+
+delete all `#define`  
+(in vscode, highlight `#define`, ctrl-shift-l (select all occurances), delete)
+
+use find/replace to escape all quotes:  
+`__VERSION__ \"5.4.1 20160919 (release) [ARM/embedded-5-branch revision 240496]\"`
+
+use regex find/replace to transform  
+`__ATOMIC_CONSUME 1` to `"__ATOMIC_CONSUME=1"`  
+find: `^([^ ]*) (.*)$`  
+replace: `"$1=$2",`
+
+clean up the extra comma at the end, and paste into `defines` section of `c_cpp_properties.json`.
