@@ -144,13 +144,12 @@ Adafruit_GFX(SSD1306_LCDWIDTH, SSD1306_LCDHEIGHT) {
   sclk = dc = cs = sid = -1;
   rst = reset;
 }
-// initializer for I2C - we only indicate the reset pin!
+// initializer for I2C without the reset pin!
 Adafruit_SSD1306::Adafruit_SSD1306() :
 Adafruit_GFX(SSD1306_LCDWIDTH, SSD1306_LCDHEIGHT) {
   sclk = dc = cs = sid = -1;
-  rst = NULL;
+  rst = -1;
 }
-
 
 void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr) {
   _vccstate = vccstate;
@@ -180,7 +179,7 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr) {
   }
 
   // Setup reset pin direction (used by both SPI and I2C)
-  if ( rst )
+  if ( rst >= 0 )
   {
     pinMode(rst, OUTPUT);
     digitalWrite(rst, HIGH);

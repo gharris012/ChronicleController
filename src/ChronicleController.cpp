@@ -2,7 +2,7 @@
 
 #include "config.h"
 #include "keys.h"
-#include "blynk.h"
+#include "lib/blynk.h"
 //#define BLYNK_PRINT Serial
 
 Adafruit_MCP23017 mcp;
@@ -11,26 +11,24 @@ Adafruit_SSD1306 display;
 OneWire own(OWNPIN);
 HttpClient http;
 
-IPAddress WebPowerSwitch_IPAddress(192,168,1,97);
+IPAddress WebPowerSwitch_IPAddress(192, 168, 1, 97);
 int WebPowerSwitch_Port = 80;
 
 http_header_t WebPowerSwitch_Headers[] = {
     //  { "Content-Type", "application/json" },
     //  { "Accept" , "application/json" },
-    { "Accept" , "*/*"},
-    { "Authorization", WEBPOWERSWITCH_AUTH },
-    { NULL, NULL } // NOTE: Always terminate headers will NULL
+    {"Accept", "*/*"},
+    {"Authorization", WEBPOWERSWITCH_AUTH},
+    {NULL, NULL} // NOTE: Always terminate headers will NULL
 };
 http_request_t WebPowerSwitch_Request;
 http_response_t WebPowerSwitch_Response;
 const char WebPowerSwitch_BaseUrl[] = "/outlet?";
 
-SerialLogHandler logHandler(LOG_LEVEL_WARN, {
-    { "app", LOG_LEVEL_INFO },
-    { "app.control.chiller", LOG_LEVEL_TRACE },
-    { "app.control.actuator", LOG_LEVEL_TRACE },
-    { "app.control.pid", LOG_LEVEL_TRACE }
-});
+SerialLogHandler logHandler(LOG_LEVEL_WARN, {{"app", LOG_LEVEL_INFO},
+                                             {"app.control.chiller", LOG_LEVEL_TRACE},
+                                             {"app.control.actuator", LOG_LEVEL_TRACE},
+                                             {"app.control.pid", LOG_LEVEL_TRACE}});
 
 Logger LogChiller("app.control.chiller");
 Logger LogActuator("app.control.actuator");
@@ -49,120 +47,112 @@ const byte DS_FERMENTER_2 = 1;
 const byte DS_AMBIENT = 2;
 const byte DS_CHILLER = 3;
 DSTempSensor ds_temp_sensor[DS_SENSOR_COUNT] = {
-    {
-        "Ferm1", // Fermenter 1
-        {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
-        1,
-        INVALID_TEMPERATURE,
-        INVALID_TEMPERATURE,
-        0,
-        FALSE
-    },
-    {
-        "Ferm2", // Fermenter 2
-        {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
-        2,
-        INVALID_TEMPERATURE,
-        INVALID_TEMPERATURE,
-        0,
-        FALSE
-    },
-    {
-        "Amb", // Ambient
-        {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
-        9,
-        INVALID_TEMPERATURE,
-        INVALID_TEMPERATURE,
-        0,
-        FALSE
-    },
-    {
-        "Chill", // Chiller
-        {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
-        10,
-        INVALID_TEMPERATURE,
-        INVALID_TEMPERATURE,
-        0,
-        FALSE
-    }
-};
+    {"Ferm1", // Fermenter 1
+     {0x28, 0xFF, 0x93, 0x76, 0x71, 0x16, 0x4, 0x73},
+     1,
+     INVALID_TEMPERATURE,
+     INVALID_TEMPERATURE,
+     0,
+     FALSE},
+    {"Ferm2", // Fermenter 2
+     {0x28, 0xFF, 0x19, 0xE7, 0x70, 0x16, 0x5, 0x9E},
+     2,
+     INVALID_TEMPERATURE,
+     INVALID_TEMPERATURE,
+     0,
+     FALSE},
+    {"Amb", // Ambient
+     {0x28, 0xFF, 0xEF, 0xE1, 0x70, 0x16, 0x5, 0xAD},
+     9,
+     INVALID_TEMPERATURE,
+     INVALID_TEMPERATURE,
+     0,
+     FALSE},
+    {"Chill", // Chiller
+     {0x28, 0xFF, 0x2A, 0xEA, 0x70, 0x16, 0x5, 0xC9},
+     10,
+     INVALID_TEMPERATURE,
+     INVALID_TEMPERATURE,
+     0,
+     FALSE}};
 
 const byte THERMISTOR_COUNT = 1;
 const byte THERM_HEATER = 0;
 const byte THERM_HEATER_PIN = A2;
 const byte BLYNK_HEATER_VPIN = 4;
 Thermistor thermistors[THERMISTOR_COUNT] = {
-    { "A/C TStat", THERM_HEATER_PIN, INVALID_TEMPERATURE, BLYNK_HEATER_VPIN }
-};
+    {"A/C TStat", THERM_HEATER_PIN, INVALID_TEMPERATURE, BLYNK_HEATER_VPIN}};
 
 const byte WPS_F1_CHILL_SOCKET = 1;
 const byte WPS_F1_HEAT_SOCKET = 3;
 TemperatureControl control_F1 = {
     "F1-Ctrl",
-    &ds_temp_sensor[DS_FERMENTER_1],    // ds temp sensor
-    NULL,                               // thermistor
-    AUTO_MODE_OFF,                      // mode
-	{ "F1-Heat", FALSE, TRUE, WPS_F1_HEAT_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
-    { "F1-Chill", FALSE, TRUE, WPS_F1_CHILL_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
-    0,                // last_action
+    &ds_temp_sensor[DS_FERMENTER_1], // ds temp sensor
+    NULL,                            // thermistor
+    AUTO_MODE_OFF,                   // mode
 
-	INVALID_TEMPERATURE,			  // tempf
-	65,								  // target
-	0,								  // error
-	2,								  // hysterisis
+    {"F1-Heat", FALSE, TRUE, WPS_F1_HEAT_SOCKET, NULL, FALSE, 18, FALSE, 0},   // actuator - wps
+    {"F1-Chill", FALSE, TRUE, WPS_F1_CHILL_SOCKET, NULL, FALSE, 18, FALSE, 0}, // actuator - wps
+    ACTION_NONE, // action
+    ACTION_NONE, // last_action
 
-	{ PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0 }, // heat-pid
-	{ PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0 }  // chill-pid
+    INVALID_TEMPERATURE, // tempf
+    65,                  // target
+    0,                   // error
+    2,                   // hysterisis
+
+    {PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0}, // heat-pid
+    {PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0}  // chill-pid
 };
 
 const byte WPS_F2_CHILL_SOCKET = 2;
 const byte WPS_F2_HEAT_SOCKET = 4;
 TemperatureControl control_F2 = {
     "F2-Ctrl",
-    &ds_temp_sensor[DS_FERMENTER_2],    // ds temp sensor
-    NULL,                               // thermistor
-	AUTO_MODE_OFF,                      // mode
-	{ "F2-Heat", FALSE, TRUE, WPS_F2_HEAT_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
-	{ "F2-Chill", FALSE, TRUE, WPS_F2_CHILL_SOCKET, NULL, FALSE, 18, FALSE, 0 }, // actuator - wps
-	0,                // last_action
+    &ds_temp_sensor[DS_FERMENTER_2],                                           // ds temp sensor
+    NULL,                                                                      // thermistor
+    AUTO_MODE_OFF,                                                             // mode
+    {"F2-Heat", FALSE, TRUE, WPS_F2_HEAT_SOCKET, NULL, FALSE, 18, FALSE, 0},   // actuator - wps
+    {"F2-Chill", FALSE, TRUE, WPS_F2_CHILL_SOCKET, NULL, FALSE, 18, FALSE, 0}, // actuator - wps
+    ACTION_NONE, // action
+    ACTION_NONE, // last_action
 
-	INVALID_TEMPERATURE,			  // tempf
-	65,								  // target
-	0,								  // error
-	2,								  // hysterisis
+    INVALID_TEMPERATURE, // tempf
+    65,                  // target
+    0,                   // error
+    2,                   // hysterisis
 
-	{ PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0 }, // heat-pid
-	{ PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0 }  // chill-pid
+    {PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0}, // heat-pid
+    {PID(), 5000, 20, 100, 0, 0, 0, FALSE, 5000, 60000, 60000, 0, 0}  // chill-pid
 };
 
 TemperatureControl control_Heater = {
     "H-Ctrl",
-	
-	NULL,                               // ds temp sensor
-    &thermistors[THERM_HEATER],         // thermistor
-    AUTO_MODE_OFF,                      // mode
 
-    { "H-Act", TRUE, FALSE, 8, NULL, FALSE, 0, FALSE, 0 }, // actuator - mcp
-	{},
-	
-	0,
-    
-	INVALID_TEMPERATURE,                // tempF
-	65,
-	0,
-	0,
-	
-	{ PID(), 100, 0.15f, 1000, 0, 0, 0, FALSE, 1, 1000, 1000, 0, 0 },
-	{}
-};
+    NULL,                       // ds temp sensor
+    &thermistors[THERM_HEATER], // thermistor
+    AUTO_MODE_OFF,              // mode
+
+    {"H-Act", TRUE, FALSE, 8, NULL, FALSE, 0, FALSE, 0}, // actuator - mcp
+    {},
+
+    ACTION_NONE, // action
+    ACTION_NONE, // last_action
+
+    INVALID_TEMPERATURE, // tempF
+    65,
+    0,
+    0,
+
+    {PID(), 100, 0.15f, 1000, 0, 0, 0, FALSE, 1, 1000, 1000, 0, 0},
+    {}};
 
 const byte FERMENTER_COUNT = 2;
 const byte F_FERMENTER_1 = 0;
 const byte F_FERMENTER_2 = 1;
 Fermenter fermenters[FERMENTER_COUNT] = {
-    { "F1", &control_F1 },
-    { "F2", &control_F2 }
-};
+    {"F1", &control_F1},
+    {"F2", &control_F2}};
 
 // after the chiller is turned off, keep checking heater until it gets below
 // {{control_set_temperature}}, then mark chiller as off, and start fan-off
@@ -178,32 +168,38 @@ unsigned long int chiller_check_heater_next_time = 0;
 Chiller chiller = {
     "C-Ctrl",
     &control_Heater,
-    { "C-Fan", FALSE, TRUE, WPS_CHILLER_FAN_SOCKET, NULL, FALSE, 12, FALSE, 0 }, // actuator - wps
+    {"C-Fan", FALSE, TRUE, WPS_CHILLER_FAN_SOCKET, NULL, FALSE, 12, FALSE, 0}, // actuator - wps
     &ds_temp_sensor[DS_CHILLER],
-    AUTO_MODE_OFF, FALSE,           // mode, state
-    CHILLER_DEFAULT_TARGET,         // target
-    10, 5, 5,                       // normal: target offset, high threshold, low threshold
-    20, 10, 10,                     // high differential: target offset, high threshold, low threshold
-    25,                             // min temperature
-    5*60000,                        // min on time - 5 minutes
-    5*60000,                        // min off time
-    80, 5, 2,                        // control_set_temperature, control_temperature_offset_high, control_temperature_offset_low
-    0                               // timer_last
+    AUTO_MODE_OFF,
+    FALSE,                  // mode, state
+    CHILLER_DEFAULT_TARGET, // target
+    10,
+    5,
+    5, // normal: target offset, high threshold, low threshold
+    20,
+    10,
+    10,        // high differential: target offset, high threshold, low threshold
+    25,        // min temperature
+    5 * 60000, // min on time - 5 minutes
+    5 * 60000, // min off time
+    80,
+    5,
+    2, // control_set_temperature, control_temperature_offset_high, control_temperature_offset_low
+    0  // timer_last
 };
 
 Button buttons[BUTTON_COUNT] = {
-    { "Left", 13, &mcp },
-    { "Right", 14, &mcp },
-    { "Up", 15, &mcp },
-    { "Down", 4, &mcp },
-    { "Sel", 3, &mcp },
-    { "Off", 2, &mcp }
-};
+    {"Left", 13, &mcp},
+    {"Right", 14, &mcp},
+    {"Up", 15, &mcp},
+    {"Down", 4, &mcp},
+    {"Sel", 3, &mcp},
+    {"Off", 2, &mcp}};
 
 unsigned long int read_temperatures_next_time = 0;
 const int read_temperatures_delay = 1000;
-unsigned long int update_pids_next_time = 0;
-const int update_pids_delay = 1000;
+unsigned long int update_controls_next_time = 0;
+const int update_controls_delay = 1000;
 unsigned long int check_memory_next_time = 0;
 const int check_memory_delay = 5000;
 
@@ -219,18 +215,19 @@ unsigned long int update_blynk_next_time = update_blynk_delay;
 const int update_aio_delay = 60000;
 unsigned long int update_aio_next_time = update_aio_delay;
 
-void setup() {
+void setup()
+{
     Serial.begin(115200);
     delay(2000); // allow time to connect serial monitor
 
     Log.info("System started");
-    Log.info("Device ID: %s", (const char*)System.deviceID());
-    Log.info("System version: %s", (const char*)System.version());
-    Log.info("App version: %s", (const char*)APP_VERSION);
-    ppublish("Starting up App Version: %s", (const char*)APP_VERSION);
+    Log.info("Device ID: %s", (const char *)System.deviceID());
+    Log.info("System version: %s", (const char *)System.version());
+    Log.info("App version: %s", (const char *)APP_VERSION);
+    ppublish("Starting up App Version: %s", (const char *)APP_VERSION);
 
     Log.info("setting up Heater pin");
-	mcp.begin();
+    mcp.begin();
     mcp.pinMode(control_Heater.heater.pin, OUTPUT);
     mcp.digitalWrite(control_Heater.heater.pin, LOW);
     pinMode(control_Heater.thermistor->pin, INPUT);
@@ -247,15 +244,15 @@ void setup() {
     // set resolution for all ds temp sensors
     own.reset();
     own.skip();
-    own.write(0x4E);         // Write scratchpad
-    own.write(0);            // TL
-    own.write(0);            // TH
-    own.write(0x3F);         // 10-bit resolution
-    own.write(0x48);         // Copy Scratchpad
-    own.write(0x44);         // start conversion
+    own.write(0x4E); // Write scratchpad
+    own.write(0);    // TL
+    own.write(0);    // TH
+    own.write(0x3F); // 10-bit resolution
+    own.write(0x48); // Copy Scratchpad
+    own.write(0x44); // start conversion
     own.reset();
 
-    setup_pids();
+    setup_controls();
 
     Log.info("Setting up buttons");
     setup_buttons(buttons, BUTTON_COUNT);
@@ -278,8 +275,8 @@ void setup() {
     // text display tests
     display.setTextSize(2);
     display.setTextColor(WHITE, 0);
-    display.setCursor(0,0);
-    snprintf(buffer, sizeof(buffer), "Ready %s", (const char*)APP_VERSION);
+    display.setCursor(0, 0);
+    snprintf(buffer, sizeof(buffer), "Ready %s", (const char *)APP_VERSION);
     display.print(buffer);
     display.display();
 }
@@ -291,18 +288,18 @@ void loop()
     check_buttons(buttons, BUTTON_COUNT);
     run_controls();
 
-    if ( rescanOWN )
+    if (rescanOWN)
     {
         scanOWN();
         rescanOWN = FALSE;
     }
 
-    if ( millis() > read_temperatures_next_time )
+    if (millis() > read_temperatures_next_time)
     {
         read_temperatures();
         read_temperatures_next_time += read_temperatures_delay;
     }
-    if ( ds_temp_sensor_is_converting && millis() > ds_temp_sensor_convert_complete_time )
+    if (ds_temp_sensor_is_converting && millis() > ds_temp_sensor_convert_complete_time)
     {
         read_ds_temperatures();
     }
@@ -310,39 +307,38 @@ void loop()
     {
         verify_actuator(&chiller.fan);
         verify_actuator(&control_F1.heater);
-		verify_actuator(&control_F1.chiller);
-		verify_actuator(&control_F2.heater);
+        verify_actuator(&control_F1.chiller);
+        verify_actuator(&control_F2.heater);
         verify_actuator(&control_F2.chiller);
     }
-    if ( millis() > update_pids_next_time )
+    if (millis() > update_controls_next_time)
     {
-        update_pids();
-        update_pids_next_time += update_pids_delay;
+        update_controls();
+        update_controls_next_time += update_controls_delay;
     }
-    if ( millis() > check_memory_next_time )
+    if (millis() > check_memory_next_time)
     {
         check_memory();
         check_memory_next_time += check_memory_delay;
     }
-    if ( chiller_check_heater_status && millis() > chiller_check_heater_next_time )
+    if (chiller_check_heater_status && millis() > chiller_check_heater_next_time)
     {
         chiller_check_heater();
     }
-    if ( ( chiller.fan.state == TRUE || chiller.fan.timer_last == 0 ) && chiller_fan_off_time > 0 && millis() > chiller_fan_off_time )
+    if ((chiller.fan.state == TRUE || chiller.fan.timer_last == 0) && chiller_fan_off_time > 0 && millis() > chiller_fan_off_time)
     {
         chiller_fan_off();
     }
-    if ( millis() > update_display_next_time )
+    if (millis() > update_display_next_time)
     {
         update_display();
         update_display_next_time += update_display_delay;
     }
-    if ( millis() > update_blynk_next_time )
+    if (millis() > update_blynk_next_time)
     {
         update_blynk();
         update_blynk_next_time += update_blynk_delay;
     }
-
 }
 
 void check_memory()
@@ -370,7 +366,7 @@ void update_display()
     //snprintf(buf, sizeof(buf), "A %2.1f %s", dsTemp[2].tempF, APP_VERSION);
 
     // if the heater is off, show ambient and version info
-    if ( chiller.heater->mode == AUTO_MODE_OFF )
+    if (chiller.heater->mode == AUTO_MODE_OFF)
     {
         memset(buffer, 0, sizeof(buffer));
         memset(fbuf, 0, sizeof(fbuf));
@@ -419,24 +415,24 @@ int blynk_pid_f2_last_report = 0;
 void update_blynk()
 {
     int i;
-    for ( i = 0 ; i < THERMISTOR_COUNT ; i ++ )
+    for (i = 0; i < THERMISTOR_COUNT; i++)
     {
-        if ( thermistors[i].blynkPin >= 0 && thermistors[i].tempF != INVALID_TEMPERATURE )
+        if (thermistors[i].blynkPin >= 0 && thermistors[i].tempF != INVALID_TEMPERATURE)
         {
             Blynk.virtualWrite(thermistors[i].blynkPin, thermistors[i].tempF);
         }
     }
-    for ( i = 0 ; i < DS_SENSOR_COUNT ; i ++ )
+    for (i = 0; i < DS_SENSOR_COUNT; i++)
     {
-        if ( ds_temp_sensor[i].blynkPin >= 0 )
+        if (ds_temp_sensor[i].blynkPin >= 0)
         {
-            if ( !ds_temp_sensor[i].present )
+            if (!ds_temp_sensor[i].present)
             {
                 ppublish("Sensor not found: %s at %d", ds_temp_sensor[i].name, i);
                 rescanOWN = TRUE;
             }
 
-            if ( ds_temp_sensor[i].present && ds_temp_sensor[i].tempF != INVALID_TEMPERATURE )
+            if (ds_temp_sensor[i].present && ds_temp_sensor[i].tempF != INVALID_TEMPERATURE)
             {
                 Blynk.virtualWrite(ds_temp_sensor[i].blynkPin, ds_temp_sensor[i].tempF);
             }
@@ -452,52 +448,52 @@ void update_blynk()
     Blynk.virtualWrite(6, fermenters[F_FERMENTER_2].control->mode);
 
     int blynkReport = 0;
-    if ( fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_ON )
+    if (fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_ON)
     {
         blynkReport = 100;
     }
-    else if ( fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_OFF )
+    else if (fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_OFF)
     {
         blynkReport = 0;
     }
-    else if ( fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_PID )
+    else if (fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_PID)
     {
         // F1 PID Output as % of window
-        blynkReport = ( ( fermenters[F_FERMENTER_1].control->chill_pid.output / fermenters[F_FERMENTER_1].control->chill_pid.window ) * 100 );
+        blynkReport = ((fermenters[F_FERMENTER_1].control->chill_pid.output / fermenters[F_FERMENTER_1].control->chill_pid.window) * 100);
     }
     else
     {
         blynkReport = -1;
     }
-    Blynk.virtualWrite(14, (int) blynkReport);
-    if ( blynkReport != blynk_pid_f1_last_report )
+    Blynk.virtualWrite(14, (int)blynkReport);
+    if (blynkReport != blynk_pid_f1_last_report)
     {
-        ppublish(" Fermenter 1: %d", (int) blynkReport);
+        ppublish(" Fermenter 1: %d", (int)blynkReport);
         blynk_pid_f1_last_report = blynkReport;
     }
 
     blynkReport = 0;
-    if ( fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_ON )
+    if (fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_ON)
     {
         blynkReport = 100;
     }
-    else if ( fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_OFF )
+    else if (fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_OFF)
     {
         blynkReport = 0;
     }
-    else if ( fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_PID )
+    else if (fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_PID)
     {
         // F2 PID Output as % of window
-        blynkReport = ( ( fermenters[F_FERMENTER_2].control->chill_pid.output / fermenters[F_FERMENTER_2].control->chill_pid.window ) * 100 );
+        blynkReport = ((fermenters[F_FERMENTER_2].control->chill_pid.output / fermenters[F_FERMENTER_2].control->chill_pid.window) * 100);
     }
     else
     {
         blynkReport = -1;
     }
-    Blynk.virtualWrite(15, (int) blynkReport);
-    if ( blynkReport != blynk_pid_f2_last_report )
+    Blynk.virtualWrite(15, (int)blynkReport);
+    if (blynkReport != blynk_pid_f2_last_report)
     {
-        ppublish(" Fermenter 2: %d", (int) blynkReport);
+        ppublish(" Fermenter 2: %d", (int)blynkReport);
         blynk_pid_f2_last_report = blynkReport;
     }
 
@@ -506,14 +502,14 @@ void update_blynk()
     // set chill target - V11
     Blynk.virtualWrite(11, chiller.target);
     // set fan status - 1/0 - V12
-    Blynk.virtualWrite(chiller.fan.blynkPin, ( chiller.fan.state ? 255 : 0 ));
-    Blynk.virtualWrite(fermenters[F_FERMENTER_1].control->chiller.blynkPin, ( fermenters[F_FERMENTER_1].control->chiller.state ? 255 : 0 ));
-    Blynk.virtualWrite(fermenters[F_FERMENTER_2].control->chiller.blynkPin, ( fermenters[F_FERMENTER_2].control->chiller.state ? 255 : 0 ));
+    Blynk.virtualWrite(chiller.fan.blynkPin, (chiller.fan.state ? 255 : 0));
+    Blynk.virtualWrite(fermenters[F_FERMENTER_1].control->chiller.blynkPin, (fermenters[F_FERMENTER_1].control->chiller.state ? 255 : 0));
+    Blynk.virtualWrite(fermenters[F_FERMENTER_2].control->chiller.blynkPin, (fermenters[F_FERMENTER_2].control->chiller.state ? 255 : 0));
 }
 
 void tempF_for_display(float tempF, char buffer[], byte buffer_size)
 {
-    if ( tempF == INVALID_TEMPERATURE )
+    if (tempF == INVALID_TEMPERATURE)
     {
         snprintf(buffer, buffer_size, "nc");
     }
@@ -525,7 +521,7 @@ void tempF_for_display(float tempF, char buffer[], byte buffer_size)
 
 void mode_for_display(bool state, char *buffer, byte buffer_size)
 {
-    if ( state )
+    if (state)
     {
         mode_as_string(AUTO_MODE_ON, buffer, buffer_size);
     }
@@ -537,7 +533,7 @@ void mode_for_display(bool state, char *buffer, byte buffer_size)
 
 void mode_for_display(bool state, float tempF, char *buffer, byte buffer_size)
 {
-    if ( state )
+    if (state)
     {
         snprintf(buffer, buffer_size, "%2.0f", tempF);
     }
@@ -549,7 +545,7 @@ void mode_for_display(bool state, float tempF, char *buffer, byte buffer_size)
 
 void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size)
 {
-    if ( mode == AUTO_MODE_AUTO || mode == AUTO_MODE_PID )
+    if (mode == AUTO_MODE_AUTO || mode == AUTO_MODE_PID)
     {
         snprintf(buffer, buffer_size, "%2.0f", tempF);
     }
@@ -561,19 +557,19 @@ void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size)
 
 void mode_as_string(byte mode, char *buffer, byte buffer_size)
 {
-    if ( mode == AUTO_MODE_ON )
+    if (mode == AUTO_MODE_ON)
     {
         snprintf(buffer, buffer_size, "ON");
     }
-    else if ( mode == AUTO_MODE_OFF )
+    else if (mode == AUTO_MODE_OFF)
     {
         snprintf(buffer, buffer_size, "OFF");
     }
-    else if ( mode == AUTO_MODE_AUTO )
+    else if (mode == AUTO_MODE_AUTO)
     {
         snprintf(buffer, buffer_size, "AT");
     }
-    else if ( mode == AUTO_MODE_PID )
+    else if (mode == AUTO_MODE_PID)
     {
         snprintf(buffer, buffer_size, "AP");
     }
@@ -586,7 +582,7 @@ void mode_as_string(byte mode, char *buffer, byte buffer_size)
 void resetOWN()
 {
     byte i = 0;
-    for ( i = 0 ; i < DS_SENSOR_COUNT ; i ++ )
+    for (i = 0; i < DS_SENSOR_COUNT; i++)
     {
         ds_temp_sensor[i].tempF = 0;
         ds_temp_sensor[i].present = FALSE;
@@ -598,13 +594,13 @@ void scanOWN()
     uint8_t addr[8];
     byte i = 0;
 
-    for ( i = 0 ; i < DS_SENSOR_COUNT ; i ++ )
+    for (i = 0; i < DS_SENSOR_COUNT; i++)
     {
         ds_temp_sensor[i].present = FALSE;
     }
 
     Log.info("Searching OWN");
-    if ( own.reset() == 1 )
+    if (own.reset() == 1)
     {
         Log.info("Network present");
     }
@@ -616,12 +612,12 @@ void scanOWN()
     own.reset_search();
     delay(250);
     // search own for sensors
-    while(own.search(addr))
+    while (own.search(addr))
     {
         Log.info("Found: %02X-%02X", addr[6], addr[7]);
-        for ( i = 0 ; i < DS_SENSOR_COUNT ; i ++ )
+        for (i = 0; i < DS_SENSOR_COUNT; i++)
         {
-            if ( memcmp(addr, ds_temp_sensor[i].addr, 8) == 0 )
+            if (memcmp(addr, ds_temp_sensor[i].addr, 8) == 0)
             {
                 Log.trace(" %s at index %d", ds_temp_sensor[i].name, i);
                 ppublish("Found sensor %s at %d", ds_temp_sensor[i].name, i);
@@ -636,7 +632,7 @@ void display_line(byte line, char *message, bool clear, bool flush)
 {
     char lcdLineBuf[LCDLINELENGTH];
 
-    if ( clear )
+    if (clear)
     {
         display.setCursor(0, LCDLINEHEIGHT * line);
         memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
@@ -649,61 +645,142 @@ void display_line(byte line, char *message, bool clear, bool flush)
     memset(lcdLineBuf, 0, sizeof(lcdLineBuf));
     snprintf(lcdLineBuf, LCDLINELENGTH, "%s%s", message, LCDBLANKLINE);
     display.print(lcdLineBuf);
-    if ( clear || flush )
+    if (clear || flush)
     {
         display.display();
     }
 }
 
-void setup_pids()
+void setup_controls()
 {
     control_F1.chill_pid.pid.Init(&control_F1.tempF, &control_F1.chill_pid.output, &control_F1.target,
-                        control_F1.chill_pid.Kp, control_F1.chill_pid.Ki, control_F1.chill_pid.Kd, 0, 1);
+                                  control_F1.chill_pid.Kp, control_F1.chill_pid.Ki, control_F1.chill_pid.Kd, 0, 1);
     control_F1.chill_pid.pid.SetOutputLimits(0, control_F1.chill_pid.max);
     control_F1.chill_pid.pid.SetMode(1);
     control_F1.chill_pid.pid.SetSampleTime(control_F1.chill_pid.window);
 
+    control_F1.heat_pid.pid.Init(&control_F1.tempF, &control_F1.heat_pid.output, &control_F1.target,
+                                 control_F1.heat_pid.Kp, control_F1.heat_pid.Ki, control_F1.heat_pid.Kd, 0, 1);
+    control_F1.heat_pid.pid.SetOutputLimits(0, control_F1.heat_pid.max);
+    control_F1.heat_pid.pid.SetMode(1);
+    control_F1.heat_pid.pid.SetSampleTime(control_F1.heat_pid.window);
+
     control_F2.chill_pid.pid.Init(&control_F2.tempF, &control_F2.chill_pid.output, &control_F2.target,
-                        control_F2.chill_pid.Kp, control_F2.chill_pid.Ki, control_F2.chill_pid.Kd, 0, 1);
+                                  control_F2.chill_pid.Kp, control_F2.chill_pid.Ki, control_F2.chill_pid.Kd, 0, 1);
     control_F2.chill_pid.pid.SetOutputLimits(0, control_F2.chill_pid.max);
     control_F2.chill_pid.pid.SetMode(1);
     control_F2.chill_pid.pid.SetSampleTime(control_F2.chill_pid.window);
 
+    control_F2.heat_pid.pid.Init(&control_F2.tempF, &control_F2.heat_pid.output, &control_F2.target,
+                                 control_F2.heat_pid.Kp, control_F2.heat_pid.Ki, control_F2.heat_pid.Kd, 0, 1);
+    control_F2.heat_pid.pid.SetOutputLimits(0, control_F2.heat_pid.max);
+    control_F2.heat_pid.pid.SetMode(1);
+    control_F2.heat_pid.pid.SetSampleTime(control_F2.heat_pid.window);
+
     control_Heater.heat_pid.pid.Init(&control_Heater.tempF, &control_Heater.heat_pid.output, &control_Heater.target,
-                        control_Heater.heat_pid.Kp, control_Heater.heat_pid.Ki, control_Heater.heat_pid.Kd, 1, 0);
+                                     control_Heater.heat_pid.Kp, control_Heater.heat_pid.Ki, control_Heater.heat_pid.Kd, 1, 0);
     control_Heater.heat_pid.pid.SetOutputLimits(0, control_Heater.heat_pid.max);
     control_Heater.heat_pid.pid.SetMode(1);
     control_Heater.heat_pid.pid.SetSampleTime(control_Heater.heat_pid.window);
 }
 
-void update_pids()
+void update_controls()
 {
     static int check_count = 0;
 
     check_count++;
-    Log.trace("Updating PIDS");
-    update_pid(&control_F1);
-    update_pid(&control_F2);
-    update_pid(&control_Heater);
+    Log.trace("Updating Controls");
+    update_control(&control_F1);
+    update_control(&control_F2);
+    update_control(&control_Heater);
 
     // chiller doesn't need to be updated very often
-    if ( check_count >= CHILLER_UPDATE_DELAY )
+    if (check_count >= CHILLER_UPDATE_DELAY)
     {
         update_chiller();
         check_count = 0;
     }
 }
 
-// calculate and update vars - every second
-void update_pid(TemperatureControl *control)
+bool compute_pid(PIDControl *pid)
 {
-    double output_adjusted;
+    double output_adjusted = 0;
+    int adjustedFlag = 0;
+
+    // returns true when a new computation has been done
+    // ie: new window
+    if (pid->pid.Compute())
+    {
+        output_adjusted = pid->output;
+        if (output_adjusted < 0)
+        {
+            output_adjusted = 0;
+            adjustedFlag |= 1;
+        }
+        pid->window_start = millis();
+        if (pid->min > output_adjusted)
+        {
+            // set window to min if output is more than half of min, otherwise 0
+            if ((pid->min / 2) < output_adjusted)
+            {
+                output_adjusted = pid->min;
+                adjustedFlag |= 2;
+            }
+            else
+            {
+                output_adjusted = 0;
+                adjustedFlag |= 4;
+            }
+        }
+        // enforce window_min for off-time as well
+        // -- leave window_min at the end
+        else if (output_adjusted > (pid->max - pid->min))
+        {
+            // round up
+            if (output_adjusted > (pid->max - (pid->min / 2)))
+            {
+                output_adjusted = pid->max;
+                adjustedFlag |= 8;
+            }
+            else
+            {
+                output_adjusted = pid->max - pid->min;
+                adjustedFlag |= 16;
+            }
+        }
+
+        // extend the max window a bit to make sure we stay on full-time
+        if (output_adjusted == pid->max)
+        {
+            pid->window_end = millis() + output_adjusted + 5000;
+        }
+        else
+        {
+            pid->window_end = millis() + output_adjusted;
+        }
+
+        // reset output to adjusted so PID can use it in the next computation
+        pid->output_original = pid->output;
+        pid->output = output_adjusted;
+        pid->adjustedFlag = adjustedFlag;
+
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+// calculate and update vars - every second
+void update_control(TemperatureControl *control)
+{
     Log.trace("Updating Control for %s", control->name);
-    if ( control->dstempsensor != NULL )
+    if (control->dstempsensor != NULL)
     {
         control->tempF = control->dstempsensor->tempF;
     }
-    else if ( control->thermistor != NULL )
+    else if (control->thermistor != NULL)
     {
         control->tempF = control->thermistor->tempF;
     }
@@ -712,75 +789,79 @@ void update_pid(TemperatureControl *control)
         Log.warn(" no temperature source!");
     }
 
-    if ( control->tempF != INVALID_TEMPERATURE && control->mode == AUTO_MODE_PID )
+    if (control->tempF != INVALID_TEMPERATURE)
     {
         control->error = control->target - control->tempF;
-        int adjustedFlag = 0;
-        if ( control->chill_pid.pid.Compute() )
-        {
-            output_adjusted = control->chill_pid.output;
-            if ( output_adjusted < 0 )
-            {
-                output_adjusted = 0;
-                adjustedFlag |= 1;
-            }
-            // returns true when a new computation has been done
-            // ie: new window
-            control->chill_pid.window_start = millis();
-            if ( control->chill_pid.min > output_adjusted )
-            {
-                // set window to min if output is more than half of min, otherwise 0
-                if ( ( control->chill_pid.min / 2 ) < output_adjusted )
-                {
-                    output_adjusted = control->chill_pid.min;
-                    adjustedFlag |= 2;
-                }
-                else
-                {
-                    output_adjusted = 0;
-                    adjustedFlag |= 4;
-                }
-            }
-            // enforce window_min for off-time as well
-            // -- leave window_min at the end
-            else if ( output_adjusted > ( control->chill_pid.max - control->chill_pid.min ) )
-            {
-                // round up
-                if ( output_adjusted > ( control->chill_pid.max - ( control->chill_pid.min / 2 ) ) )
-                {
-                    output_adjusted = control->chill_pid.max;
-                    adjustedFlag |= 8;
-                }
-                else
-                {
-                    output_adjusted =  control->chill_pid.max - control->chill_pid.min;
-                    adjustedFlag |= 16;
-                }
-            }
 
-            // extend the max window a bit to make sure we stay on full-time
-            if ( output_adjusted == control->chill_pid.max )
+        // negative -> needs heat
+
+        // positive -> needs cold
+        //  or we're in a cooling loop and within hysterisis
+        if (control->error > 0 
+        || (abs(control->error) <= control->hysterisis 
+        && ( control->mode & AUTO_MODE_PID ) > 0 && control->last_action == ACTION_CHILL))
+        {
+            if ((control->mode & AUTO_MODE_CHILL) > 0)
             {
-                control->chill_pid.window_end = millis() + output_adjusted + 5000;
+                if ((control->mode & AUTO_MODE_PID) > 0)
+                {
+                    if (compute_pid(&control->chill_pid))
+                    {
+                        if (control->chill_pid.publish_results)
+                        {
+                            char buffer[50];
+                            snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->chill_pid.output_original, control->chill_pid.output, control->chill_pid.adjustedFlag);
+                            ppublish(buffer);
+                            LogPID.trace(buffer);
+                        }
+                    }
+                    // as long as we stay within hysterisis, keep action_chill
+                    control->action = ACTION_CHILL;
+                }
+                else if ((control->mode & AUTO_MODE_AUTO) > 0)
+                {
+                    if (abs(control->error) > control->hysterisis)
+                    {
+                        control->action = ACTION_CHILL;
+                    }
+                    else
+                    {
+                        control->action = ACTION_NONE;
+                    }
+                }
             }
             else
             {
-                control->chill_pid.window_end = millis() + output_adjusted;
+                // above temp, chill disabled, nothing to do
             }
+        }
+        else if (control->error < 0 
+        || (abs(control->error) <= control->hysterisis 
+        && (control->mode & AUTO_MODE_PID) > 0 && control->last_action == ACTION_HEAT))
+        {
+            if ((control->mode & AUTO_MODE_HEAT) > 0)
+            {
+            }
+            else
+            {
+                // below temp, heat disabled, nothing to do
+            }
+        }
+        else
+        {
+            // at temp, things disabled? nothing to do
+            LogPID.info("%s control: error: %3.2f ; action: %d ; last_action: %d nothing to do", control->name, control->error, control->action, control->last_action);
+        }
 
-            if ( control->chill_pid.publish_results )
+        if (compute_pid(&control->chill_pid))
+        {
+            if (control->chill_pid.publish_results)
             {
                 char buffer[50];
-                //snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %ld %ld %d", control->name, control->error, control->output, output_adjusted, millis(), control->window_end, adjustedFlag);
-                snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->chill_pid.output, output_adjusted, adjustedFlag);
+                snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->chill_pid.output_original, control->chill_pid.output, control->chill_pid.adjustedFlag);
                 ppublish(buffer);
                 LogPID.trace(buffer);
             }
-
-            // reset output to adjusted so PID can use it in the next computation
-			control->chill_pid.output_original = control->chill_pid.output;
-            control->chill_pid.output = output_adjusted;
-			control->chill_pid.adjustedFlag = adjustedFlag;
         }
     }
 }
@@ -792,7 +873,7 @@ void update_chiller()
 
     bool state = FALSE;
 
-    if ( chiller.mode == AUTO_MODE_AUTO )
+    if (chiller.mode == AUTO_MODE_AUTO)
     {
         // set up chiller target
         //  gather fermenter target temperatures
@@ -802,26 +883,26 @@ void update_chiller()
         float f_target = 100;
 
         // 'loop' over fermenters and find lowest target, and biggest differential
-        if ( fermenters[F_FERMENTER_1].control->mode != AUTO_MODE_OFF )
+        if (fermenters[F_FERMENTER_1].control->mode != AUTO_MODE_OFF)
         {
-            if ( fermenters[F_FERMENTER_1].control->target < f_target )
+            if (fermenters[F_FERMENTER_1].control->target < f_target)
             {
                 f_target = fermenters[F_FERMENTER_1].control->target;
             }
-            if ( fermenters[F_FERMENTER_1].control->tempF != INVALID_TEMPERATURE &&
-               fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target > f_diff )
+            if (fermenters[F_FERMENTER_1].control->tempF != INVALID_TEMPERATURE &&
+                fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target > f_diff)
             {
                 f_diff = fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target;
             }
         }
-        if ( fermenters[F_FERMENTER_2].control->mode != AUTO_MODE_OFF )
+        if (fermenters[F_FERMENTER_2].control->mode != AUTO_MODE_OFF)
         {
-            if ( fermenters[F_FERMENTER_2].control->target < f_target )
+            if (fermenters[F_FERMENTER_2].control->target < f_target)
             {
                 f_target = fermenters[F_FERMENTER_2].control->target;
             }
-            if ( fermenters[F_FERMENTER_2].control->tempF != INVALID_TEMPERATURE &&
-               fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target > f_diff )
+            if (fermenters[F_FERMENTER_2].control->tempF != INVALID_TEMPERATURE &&
+                fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target > f_diff)
             {
                 f_diff = fermenters[F_FERMENTER_2].control->tempF - fermenters[F_FERMENTER_2].control->target;
             }
@@ -831,7 +912,7 @@ void update_chiller()
         int threshold_high;
         int threshold_low;
 
-        if ( f_diff > CHILLER_HIGH_DIFF_THRESHOLD )
+        if (f_diff > CHILLER_HIGH_DIFF_THRESHOLD)
         {
             LogChiller.trace(" high differential");
             //ppublish("Chiller High Differential: %2.0f", f_diff);
@@ -853,13 +934,12 @@ void update_chiller()
 
         LogChiller.trace(" current: %2f ; target: %2d", chiller.dstempsensor->tempF, chiller.target);
         LogChiller.trace(" threshold high: %d ; low: %d", threshold_high, threshold_low);
-        LogChiller.trace(" on temp: %2d ; off temp: %2d", chiller.target + threshold_high, chiller.target - threshold_low );
-        ppublish("Chiller Target: %d < %d < %d", chiller.target - threshold_low, (int) chiller.target, chiller.target + threshold_high );
+        LogChiller.trace(" on temp: %2d ; off temp: %2d", chiller.target + threshold_high, chiller.target - threshold_low);
+        ppublish("Chiller Target: %d < %d < %d", chiller.target - threshold_low, (int)chiller.target, chiller.target + threshold_high);
 
         // if we're off, kick on when we get over target+threshold
         // if we're on, stay on until we are below target-threshold
-        if ( ( chiller.state == FALSE && chiller.dstempsensor->tempF > ( chiller.target + threshold_high ) )
-            || ( chiller.state == TRUE && chiller.dstempsensor->tempF > ( chiller.target - threshold_low ) ) )
+        if ((chiller.state == FALSE && chiller.dstempsensor->tempF > (chiller.target + threshold_high)) || (chiller.state == TRUE && chiller.dstempsensor->tempF > (chiller.target - threshold_low)))
         {
             state = TRUE;
         }
@@ -868,11 +948,11 @@ void update_chiller()
             state = FALSE;
         }
     }
-    else if ( chiller.mode == AUTO_MODE_ON )
+    else if (chiller.mode == AUTO_MODE_ON)
     {
         state = TRUE;
     }
-    else if ( chiller.mode == AUTO_MODE_OFF )
+    else if (chiller.mode == AUTO_MODE_OFF)
     {
         state = FALSE;
     }
@@ -885,25 +965,23 @@ void update_chiller()
 
     // Filter Chiller logic: have we been on or off long enough?
     //  some cushion to allow initialization
-    if ( chiller.state != state && chiller.timer_last > 5000 )
+    if (chiller.state != state && chiller.timer_last > 5000)
     {
         unsigned long int next_available_time = 0;
         // on and on_time > min_on_time
-        if ( chiller.state == TRUE
-                && chiller.timer_last + chiller.min_on_time > millis() )
+        if (chiller.state == TRUE && chiller.timer_last + chiller.min_on_time > millis())
         {
             next_available_time = chiller.timer_last + chiller.min_on_time;
             state = TRUE;
         }
         // off and off_time > min_off_time
-        if ( chiller.state == FALSE
-                && chiller.timer_last + chiller.min_off_time > millis() )
+        if (chiller.state == FALSE && chiller.timer_last + chiller.min_off_time > millis())
         {
             next_available_time = chiller.timer_last + chiller.min_off_time;
             state = FALSE;
         }
 
-        if ( chiller.state == state )
+        if (chiller.state == state)
         {
             LogChiller.warn(" overriding due to min on/off time: %d ; next time: %ld", chiller.state, next_available_time);
             ppublish(" overriding due to min on/off time: %d ; next time: %ld", chiller.state, next_available_time);
@@ -912,8 +990,8 @@ void update_chiller()
 
     // override : current temp < min temp -> shut it down!
     //  ... or at least start the shut down process
-    if ( chiller.dstempsensor->tempF != INVALID_TEMPERATURE && chiller.dstempsensor->tempF <= chiller.min_temperature &&
-            ( state == TRUE || chiller.state == TRUE ) )
+    if (chiller.dstempsensor->tempF != INVALID_TEMPERATURE && chiller.dstempsensor->tempF <= chiller.min_temperature &&
+        (state == TRUE || chiller.state == TRUE))
     {
         LogChiller.warn(" temp too low, shutting down");
         ppublish("chiller: temp too low, shutting down");
@@ -922,12 +1000,12 @@ void update_chiller()
 
     // if we decide the A/C should be on, turn on the heater PID
     LogChiller.trace(" chiller state: %d ; timer_last: %ld", chiller.state, chiller.timer_last);
-    if ( chiller.state != state || ( chiller.state == FALSE && chiller.timer_last == 0 ) )
+    if (chiller.state != state || (chiller.state == FALSE && chiller.timer_last == 0))
     {
         LogChiller.trace(" updating chiller state");
         chiller.state = state;
         chiller.timer_last = millis();
-        if ( state )
+        if (state)
         {
             LogChiller.info(" turning Chiller ON");
             ppublish("Turning Chiller ON");
@@ -957,9 +1035,9 @@ void update_chiller()
 void chiller_check_heater()
 {
     LogChiller.trace(" check chiller heater: %2.2f < %2d", chiller.heater->tempF, chiller.control_set_temperature);
-    if ( chiller.state == FALSE )
+    if (chiller.state == FALSE)
     {
-        if ( chiller.heater->tempF < ( chiller.control_set_temperature - chiller.control_temperature_offset_low ) )
+        if (chiller.heater->tempF < (chiller.control_set_temperature - chiller.control_temperature_offset_low))
         {
             LogChiller.info(" heater is back down below control_set_temperature, marking Chiller off");
             ppublish("heater is below control, marking Chiller off");
@@ -992,24 +1070,76 @@ void run_controls()
 // determine, right now, if a control should be on/off
 void run_control(TemperatureControl *control)
 {
-    if ( control->mode == AUTO_MODE_PID )
+    if ((control->mode & AUTO_MODE_PID) > 0)
     {
-        if ( millis() >= control->chill_pid.window_start && millis() <= control->chill_pid.window_end )
+        if ((control->action & ACTION_CHILL) > 0 )
+        {
+            if (millis() >= control->chill_pid.window_start && millis() <= control->chill_pid.window_end)
+            {
+                actuate(&control->chiller, TRUE);
+            }
+            else
+            {
+                actuate(&control->chiller, FALSE);
+            }
+        }
+        if ((control->action & ACTION_HEAT) > 0)
+        {
+            if (millis() >= control->heat_pid.window_start && millis() <= control->heat_pid.window_end)
+            {
+                actuate(&control->heater, TRUE);
+            }
+            else
+            {
+                actuate(&control->heater, FALSE);
+            }
+        }
+
+        control->last_action = control->action;
+        control->action = ACTION_NONE;
+    }
+    else if ((control->mode & AUTO_MODE_AUTO) > 0)
+    {
+        if ((control->action & ACTION_CHILL) > 0)
         {
             actuate(&control->chiller, TRUE);
+            if ((control->last_action & ACTION_HEAT )> 0)
+            {
+                actuate(&control->heater, FALSE);
+            }
         }
-        else
+        else if ((control->action & ACTION_HEAT) >0)
         {
-            actuate(&control->chiller, FALSE);
+            actuate(&control->heater, TRUE);
+            if ((control->last_action & ACTION_CHILL) > 0)
+            {
+                actuate(&control->chiller, FALSE);
+            }
         }
+        control->last_action = control->action;
+        control->action = ACTION_NONE;
     }
-    else if ( control->mode == AUTO_MODE_ON )
+    else if ((control->mode & AUTO_MODE_ON) > 0)
     {
-        actuate(&control->chiller, TRUE);
+        control->last_action = 0;
+        if ((control->mode & AUTO_MODE_CHILL) > 0)
+        {
+            actuate(&control->chiller, TRUE);
+            control->last_action |= ACTION_CHILL;
+        }
+        if ((control->mode & AUTO_MODE_HEAT) > 0)
+        {
+            actuate(&control->heater, TRUE);
+            control->last_action |= ACTION_HEAT;
+        }
+        control->action = ACTION_NONE;
     }
-    else if ( control->mode == AUTO_MODE_OFF )
+    else if ((control->mode & AUTO_MODE_OFF) > 0)
     {
         actuate(&control->chiller, FALSE);
+        actuate(&control->heater, FALSE);
+        control->last_action = ACTION_NONE;
+        control->action = ACTION_NONE;
     }
     else
     {
@@ -1019,7 +1149,7 @@ void run_control(TemperatureControl *control)
 
 void verify_actuator(Actuator *actuator)
 {
-    if ( actuator->target_state != actuator->state )
+    if (actuator->target_state != actuator->state)
     {
         actuate(actuator, actuator->target_state);
     }
@@ -1034,18 +1164,18 @@ void actuate(Actuator *actuator, bool on)
 void actuate(Actuator *actuator, bool on, bool force)
 {
     actuator->target_state = on;
-    if ( on )
+    if (on)
     {
-        if ( actuator->state == FALSE || force )
+        if (actuator->state == FALSE || force)
         {
             LogActuator.info("  actuator: turning %s ON", actuator->name);
-            if ( actuator->isMcp )
+            if (actuator->isMcp)
             {
                 actuator->mcp->digitalWrite(actuator->pin, HIGH);
                 actuator->state = TRUE;
                 actuator->timer_last = millis();
             }
-            else if ( actuator->isWebPowerSwitch )
+            else if (actuator->isWebPowerSwitch)
             {
                 ppublish("actuator: turning %s ON", actuator->name);
 
@@ -1055,7 +1185,7 @@ void actuate(Actuator *actuator, bool on, bool force)
                 WebPowerSwitch_Request.path = path.c_str();
                 LogActuator.trace("  actuator: wps path: %s", path.c_str());
                 http.get(WebPowerSwitch_Request, WebPowerSwitch_Response, WebPowerSwitch_Headers);
-                if ( WebPowerSwitch_Response.status != 200 )
+                if (WebPowerSwitch_Response.status != 200)
                 {
                     ppublish("actuator: %s WPS failed: %d", actuator->name, WebPowerSwitch_Response.status);
                     LogActuator.warn(" Response Status: %d", WebPowerSwitch_Response.status);
@@ -1079,16 +1209,16 @@ void actuate(Actuator *actuator, bool on, bool force)
     else
     {
         // when we're just starting up, force things off
-        if ( actuator->state == TRUE || force )
+        if (actuator->state == TRUE || force)
         {
             LogActuator.trace("  actuator: turning %s OFF", actuator->name);
-            if ( actuator->isMcp )
+            if (actuator->isMcp)
             {
                 actuator->mcp->digitalWrite(actuator->pin, LOW);
                 actuator->state = FALSE;
                 actuator->timer_last = millis();
             }
-            else if ( actuator->isWebPowerSwitch )
+            else if (actuator->isWebPowerSwitch)
             {
                 ppublish("actuator: turning %s OFF", actuator->name);
 
@@ -1098,7 +1228,7 @@ void actuate(Actuator *actuator, bool on, bool force)
                 WebPowerSwitch_Request.path = path.c_str();
                 LogActuator.trace("  actuator: wps path: %s", path.c_str());
                 http.get(WebPowerSwitch_Request, WebPowerSwitch_Response, WebPowerSwitch_Headers);
-                if ( WebPowerSwitch_Response.status != 200 )
+                if (WebPowerSwitch_Response.status != 200)
                 {
                     ppublish("actuator: %s WPS failed: %d", actuator->name, WebPowerSwitch_Response.status);
                     LogActuator.warn(" Response Status: %d", WebPowerSwitch_Response.status);
@@ -1153,7 +1283,7 @@ void read_temperatures()
     byte i = 0;
 
     Log.trace("Reading thermistor temperatures");
-    for ( i = 0 ; i < THERMISTOR_COUNT ; i ++ )
+    for (i = 0; i < THERMISTOR_COUNT; i++)
     {
         thermistors[i].tempF = convertTempCtoF(readTempC(&thermistors[i]));
     }
@@ -1169,21 +1299,21 @@ void read_ds_temperatures()
     float therm = INVALID_TEMPERATURE;
 
     own.reset();
-    for ( i = 0 ; i < DS_SENSOR_COUNT ; i ++ )
+    for (i = 0; i < DS_SENSOR_COUNT; i++)
     {
         therm = INVALID_TEMPERATURE;
-        if ( ds_temp_sensor[i].present )
+        if (ds_temp_sensor[i].present)
         {
             present_count++;
             own.reset();
             own.select(ds_temp_sensor[i].addr);
-            if ( own.read() )
+            if (own.read())
             {
                 // if at least one comes back, indicate that we are done converting
                 ds_temp_sensor_is_converting = FALSE;
                 therm = readTempC(&ds_temp_sensor[i]);
                 ds_temp_sensor[i].last_tempF = therm;
-                if ( therm != INVALID_TEMPERATURE )
+                if (therm != INVALID_TEMPERATURE)
                 {
                     ds_temp_sensor[i].tempF = convertTempCtoF(therm);
                     ds_temp_sensor[i].last_valid_read = millis();
@@ -1196,9 +1326,7 @@ void read_ds_temperatures()
             // if we didn't get a good read, and it's been more than
             //  DS_TEMP_GRACE_PERIOD millis, note it
             // but leave it.. it might come back!
-            if ( ds_temp_sensor[i].last_tempF == INVALID_TEMPERATURE
-                    && ds_temp_sensor[i].tempF != INVALID_TEMPERATURE
-                    && ( ds_temp_sensor[i].last_valid_read + DS_TEMP_GRACE_PERIOD ) < millis() )
+            if (ds_temp_sensor[i].last_tempF == INVALID_TEMPERATURE && ds_temp_sensor[i].tempF != INVALID_TEMPERATURE && (ds_temp_sensor[i].last_valid_read + DS_TEMP_GRACE_PERIOD) < millis())
             {
                 ds_temp_sensor[i].tempF = INVALID_TEMPERATURE;
                 Log.warn(" %s in invalid for too long", ds_temp_sensor[i].name);
@@ -1207,14 +1335,13 @@ void read_ds_temperatures()
         }
     }
     // if there are none found, don't keep hammering the network
-    if ( present_count == 0 )
+    if (present_count == 0)
     {
         Log.warn("No DS Temperatures Present!");
         ppublish("No DS Temperatures Present!");
         ds_temp_sensor_is_converting = FALSE;
     }
 }
-
 
 #define TEMPSAMPLES 10
 #define SERIESRESISTOR 10000
@@ -1228,35 +1355,35 @@ float readTempC(Thermistor *thermistor)
     float average = 0;
 
     // take N samples in a row, with a slight delay
-    for ( i = 0 ; i < TEMPSAMPLES ; i++ )
+    for (i = 0; i < TEMPSAMPLES; i++)
     {
         average += analogRead(thermistor->pin);
         delay(10);
     }
     average /= TEMPSAMPLES;
 
-    #ifdef THERM_DEBUG
-        Log.trace("Average analog reading %f", average);
-    #endif
+#ifdef THERM_DEBUG
+    Log.trace("Average analog reading %f", average);
+#endif
 
     // convert the value to resistance
     average = 4095 / average - 1;
     average = SERIESRESISTOR / average;
-    #ifdef THERM_DEBUG
-        Log.trace("Thermistor resistance %f", average);
-    #endif
+#ifdef THERM_DEBUG
+    Log.trace("Thermistor resistance %f", average);
+#endif
 
     float steinhart;
-    steinhart = average / THERMISTORNOMINAL;     // (R/Ro)
-    steinhart = log(steinhart);                  // ln(R/Ro)
-    steinhart /= TEMPCOEFFICIENT;                   // 1/B * ln(R/Ro)
+    steinhart = average / THERMISTORNOMINAL;          // (R/Ro)
+    steinhart = log(steinhart);                       // ln(R/Ro)
+    steinhart /= TEMPCOEFFICIENT;                     // 1/B * ln(R/Ro)
     steinhart += 1.0 / (TEMPERATURENOMINAL + 273.15); // + (1/To)
-    steinhart = 1.0 / steinhart;                 // Invert
-    steinhart -= 273.15;                         // convert to C
+    steinhart = 1.0 / steinhart;                      // Invert
+    steinhart -= 273.15;                              // convert to C
 
-    #ifdef THERM_DEBUG
-        Log.trace("Temperature %f *C", steinhart, steinhartf);
-    #endif
+#ifdef THERM_DEBUG
+    Log.trace("Temperature %f *C", steinhart, steinhartf);
+#endif
 
     return steinhart;
 }
@@ -1272,13 +1399,14 @@ float readTempC(DSTempSensor *dstemp)
     own.select(dstemp->addr);
     own.write(0xBE);
 
-    for ( i = 0 ; i < 9 ; i ++ )
+    for (i = 0; i < 9; i++)
     {
         data[i] = own.read();
     }
 
     uint8_t crc = OneWire::crc8(data, 8);
-    if ( crc != data[8] ) {
+    if (crc != data[8])
+    {
         Log.warn(" invalid crc: %d != %d", crc, data[8]);
         return INVALID_TEMPERATURE;
     }
@@ -1287,17 +1415,17 @@ float readTempC(DSTempSensor *dstemp)
 
     byte cfg = (data[4] & 0x60);
     // at lower res, the low bits are undefined, so let's zero them
-    if ( cfg == 0x00 )
+    if (cfg == 0x00)
     {
-        raw = raw & ~7;  // 9 bit resolution, 93.75 ms
+        raw = raw & ~7; // 9 bit resolution, 93.75 ms
     }
     else if (cfg == 0x20)
     {
-         raw = raw & ~3; // 10 bit res, 187.5 ms
+        raw = raw & ~3; // 10 bit res, 187.5 ms
     }
     else if (cfg == 0x40)
     {
-         raw = raw & ~1; // 11 bit res, 375 ms
+        raw = raw & ~1; // 11 bit res, 375 ms
     }
 
     //Log.trace(" %s => data[0]: %d ; data[1]: %d => raw: %d", dstemp->name, data[0], data[1], raw);
@@ -1314,33 +1442,33 @@ float convertTempCtoF(float tempC)
     return tempC * 1.8 + 32.0;
 }
 
-void button_onPress(Button* button)
+void button_onPress(Button *button)
 {
     //Log.trace("%s was clicked.", button->name);
 }
 
-void button_onRelease(Button* button)
+void button_onRelease(Button *button)
 {
     //Log.trace("%s was clicked.", button->name);
 }
 
-void button_onLongClick(Button* button)
+void button_onLongClick(Button *button)
 {
     //Log.trace("%s was clicked.", button->name);
 }
 
-void button_onClick(Button* button)
+void button_onClick(Button *button)
 {
     char buffer[10];
     memset(buffer, 0, sizeof(buffer));
     Log.info("%s was clicked.", button->name);
-    if ( strcmp("Right", button->name) == 0 )
+    if (strcmp("Right", button->name) == 0)
     {
-        if ( chiller.heater->mode == AUTO_MODE_PID )
+        if (chiller.heater->mode == AUTO_MODE_PID)
         {
             chiller.heater->mode = AUTO_MODE_ON;
         }
-        else if ( chiller.heater->mode == AUTO_MODE_OFF )
+        else if (chiller.heater->mode == AUTO_MODE_OFF)
         {
             chiller.heater->mode = AUTO_MODE_PID;
         }
@@ -1351,17 +1479,17 @@ void button_onClick(Button* button)
         mode_as_string(chiller.heater->mode, buffer, sizeof(buffer));
         Log.info("Setting heater to %s", buffer);
     }
-    else if ( strcmp("Up", button->name) == 0 )
+    else if (strcmp("Up", button->name) == 0)
     {
         scanOWN();
     }
-    else if ( strcmp("Down", button->name) == 0 )
+    else if (strcmp("Down", button->name) == 0)
     {
-        if ( chiller.mode == AUTO_MODE_AUTO )
+        if (chiller.mode == AUTO_MODE_AUTO)
         {
             chiller.mode = AUTO_MODE_ON;
         }
-        else if ( chiller.mode == AUTO_MODE_OFF )
+        else if (chiller.mode == AUTO_MODE_OFF)
         {
             chiller.mode = AUTO_MODE_AUTO;
         }
@@ -1373,13 +1501,13 @@ void button_onClick(Button* button)
         Log.info(" setting %s to %s", chiller.name, buffer);
         update_chiller();
     }
-    else if ( strcmp("Left", button->name) == 0 )
+    else if (strcmp("Left", button->name) == 0)
     {
-        if ( fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_PID )
+        if (fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_PID)
         {
             fermenters[F_FERMENTER_1].control->mode = AUTO_MODE_ON;
         }
-        else if ( fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_OFF )
+        else if (fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_OFF)
         {
             fermenters[F_FERMENTER_1].control->mode = AUTO_MODE_PID;
         }
@@ -1390,13 +1518,13 @@ void button_onClick(Button* button)
         mode_as_string(fermenters[F_FERMENTER_1].control->mode, buffer, sizeof(buffer));
         Log.info("Setting %s to %s", fermenters[F_FERMENTER_1].name, buffer);
     }
-    else if ( strcmp("Sel", button->name) == 0 )
+    else if (strcmp("Sel", button->name) == 0)
     {
-        if ( fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_PID )
+        if (fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_PID)
         {
             fermenters[F_FERMENTER_2].control->mode = AUTO_MODE_ON;
         }
-        else if ( fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_OFF )
+        else if (fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_OFF)
         {
             fermenters[F_FERMENTER_2].control->mode = AUTO_MODE_PID;
         }
@@ -1407,7 +1535,7 @@ void button_onClick(Button* button)
         mode_as_string(fermenters[F_FERMENTER_2].control->mode, buffer, sizeof(buffer));
         Log.info("Setting %s to %s", fermenters[F_FERMENTER_2].name, buffer);
     }
-    else if ( strcmp("Off", button->name) == 0 )
+    else if (strcmp("Off", button->name) == 0)
     {
         Log.info("Turning everything off.");
         all_off();
@@ -1424,7 +1552,7 @@ BLYNK_CONNECTED()
 {
     // on initial connection, sync all buttons
     //  this makes Blynk in charge!
-    if ( !isBlynkConnected )
+    if (!isBlynkConnected)
     {
         isBlynkConnected = TRUE;
         Blynk.syncAll();
@@ -1432,7 +1560,7 @@ BLYNK_CONNECTED()
 }
 BLYNK_WRITE(V0)
 {
-    if ( blynkFirstRun )
+    if (blynkFirstRun)
     {
         Log.info("blynk -> ignoring off (first run)");
         ppublish("blynk -> ignoring off (first run)");

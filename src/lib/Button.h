@@ -3,6 +3,8 @@
 
 #define BUTTON_DEBOUNCE_DELAY 10
 #define BUTTON_LONGPRESS_THRESHOLD 300
+
+#include "application.h"
 #include "Adafruit_MCP23017.h"
 
 typedef struct Button

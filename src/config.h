@@ -10,20 +10,22 @@
 #define LCDBLANKLINE "          "
 #define AUTO_MODE_ON 1
 #define AUTO_MODE_OFF 2
-#define AUTO_MODE_PID 3
-#define AUTO_MODE_AUTO 4
-#define AUTO_MODE_CHILL 5
-#define AUTO_MODE_HEAT 6
+#define AUTO_MODE_PID 4
+#define AUTO_MODE_AUTO 8
+#define AUTO_MODE_CHILL 16
+#define AUTO_MODE_HEAT 32
 #define MENU_ON AUTO_MODE_ON
 #define MENU_OFF AUTO_MODE_OFF
 #define MENU_PID AUTO_MODE_PID        // PID control
 #define MENU_AUTO AUTO_MODE_AUTO      // Dumb auto : setpoint, threshold min/max
-#define MENU_PCHILL AUTO_MODE_CHILL   // PID - Chiller only
-#define MENU_PHEAT AUTO_MODE_HEAT     // PID - Heater only
+#define MENU_PCHILL AUTO_MODE_PID | AUTO_MODE_CHILL   // PID - Chiller only
+#define MENU_PHEAT AUTO_MODE_PID | AUTO_MODE_HEAT     // PID - Heater only
+#define MENU_ACHILL AUTO_MODE_AUTO | AUTO_MODE_CHILL   // Auto - Chiller only
+#define MENU_AHEAT AUTO_MODE_AUTO | AUTO_MODE_HEAT     // Auto - Heater only
 #define CONTROL_HIGH_DIFFERENTIAL 10  // error > DIFFERENTIAL -> high differential
-#define ACTION_NONE 0
-#define ACITON_CHILL 1
-#define ACITON_HEAT -1
+#define ACTION_NONE 1
+#define ACTION_CHILL 2
+#define ACTION_HEAT 4
 #define BUTTON_COUNT 6
 #define NULL 0
 
@@ -105,7 +107,8 @@ struct TemperatureControl
     Actuator heater;
     Actuator chiller;
 
-    int8_t last_action; // 0 none, 1 - chill, -1 - heat
+    uint8_t action; // 1 none, 2 - chill, 4 - heat
+    uint8_t last_action; // 1 none, 2 - chill, 4 - heat
 
     double tempF;
     double target;
@@ -175,9 +178,10 @@ void resetOWN();
 void scanOWN();
 void read_temperatures();
 void read_ds_temperatures();
-void setup_pids();
-void update_pids();
-void update_pid(TemperatureControl *control);
+bool compute_pid(PIDControl *pid);
+void setup_controls();
+void update_controls();
+void update_control(TemperatureControl *control);
 void update_chiller();
 void run_controls();
 void run_control(TemperatureControl *control);

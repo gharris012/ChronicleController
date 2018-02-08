@@ -6,7 +6,7 @@
         {
             "label": "Build",
             "type": "shell",
-            "command": "cmd /c build.cmd main",
+            "command": "cmd /c build.cmd main ${workspaceRoot}",
             "presentation": {
                 "echo": true,
                 "reveal": "always",
@@ -24,7 +24,7 @@
         {
             "label": "Rebuild",
             "type": "shell",
-            "command": "build.cmd all",
+            "command": "cmd /c build.cmd all ${workspaceRoot}",
             "presentation": {
                 "echo": true,
                 "reveal": "always",
@@ -39,14 +39,17 @@
         {
             "label": "Clean",
             "type": "shell",
-            "command": "build.cmd clean",
+            "command": "cmd /c build.cmd clean ${workspaceRoot}",
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": false,
                 "panel": "shared"
             },
-            "group": "build"
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
         }
     ]
 }
