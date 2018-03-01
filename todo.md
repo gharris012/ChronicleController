@@ -46,9 +46,18 @@ control->
 set + threshold => start chiller PID
 set - threshold => start heater PID
 
-# VS Code Includes and defines
+# VS Code Setup
+
+## Environment Variables:
+GNUARMNONEHOME
+Location of GNU ARM None (ie: C:\Program Files (x86)\GNU Tools ARM Embedded\5.3 2016q1)
+GNUARMNONEVERSION
+Compiler version (ie: 5.3.1 (from C:\Program Files (x86)\GNU Tools ARM Embedded\5.3 2016q1\lib\gcc\arm-none-eabi\5.3.1)
+PARTICLEHOME
+Location of particle firmware source (ie: C:\Code\src\particle)
+
+## Defines
 see  
-http://shadetail.com/blog/using-visual-studio-code-for-arm-development-include-paths/  
 http://shadetail.com/blog/using-visual-studio-code-for-arm-development-defines/
 
 echo | arm-none-eabi-gcc -dM -E - > gcc-defines.txt
@@ -65,3 +74,16 @@ find: `^([^ ]*) (.*)$`
 replace: `"$1=$2",`
 
 clean up the extra comma at the end, and paste into `defines` section of `c_cpp_properties.json`.
+
+## Includes
+
+### GNU/System
+http://shadetail.com/blog/using-visual-studio-code-for-arm-development-include-paths/  
+
+### Particle
+In PARTICLEHOME
+```dir /ON /AD /S /B | grep -v tests | grep -v .git | grep -v build | grep -v docs | sed s/\\/\//g | sed 's/.*/"&",/g' > out.txt```
+
+change all `PARTICLEHOME` to `${env:PARTICLEHOME}
+
+clean up the extra comma at the end, and paste into `includePath` section of `c_cpp_properties.json`.
