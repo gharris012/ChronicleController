@@ -32,13 +32,12 @@
 #include "application.h"
 #include <stdlib.h>
 #include <math.h>
-#include "lib/Button.h"
-#include "lib/Adafruit_GFX.h"
-#include "lib/Adafruit_SSD1306.h"
-#include "lib/Adafruit_MCP23017.h"
-#include "lib/OneWire.h"
-#include "lib/PID_v1.h"
-#include "lib/httpclient2.h"
+#include "Button.h"
+#include "Adafruit_SSD1306.h"
+#include "Adafruit_MCP23017.h"
+#include "OneWire.h"
+#include "pid.h"
+#include "HttpClient.h"
 
 struct DSTempSensor
 {

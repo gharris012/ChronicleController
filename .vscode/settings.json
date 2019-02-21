@@ -1,2 +1,8 @@
-{"terminal.integrated.shell.windows": "cmd.exe"
+{
+    "extensions.ignoreRecommendations": true,
+    "C_Cpp.default.configurationProvider": "particle.particle-vscode-core",
+    "files.associations": {
+        "*.ino": "cpp"
+    },
+    "particle.targetDevice": "eklo_photon"
 }

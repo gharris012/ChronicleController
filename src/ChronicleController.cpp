@@ -2,12 +2,12 @@
 
 #include "config.h"
 #include "keys.h"
-#include "lib/blynk.h"
+#include "blynk.h"
 //#define BLYNK_PRINT Serial
 
 Adafruit_MCP23017 mcp;
 byte achState = LOW;
-Adafruit_SSD1306 display;
+Adafruit_SSD1306 display(-1);
 OneWire own(OWNPIN);
 HttpClient http;
 
@@ -653,31 +653,31 @@ void display_line(byte line, char *message, bool clear, bool flush)
 
 void setup_controls()
 {
-    control_F1.chill_pid.pid.Init(&control_F1.tempF, &control_F1.chill_pid.output, &control_F1.target,
+    control_F1.chill_pid.pid.Setup(&control_F1.tempF, &control_F1.chill_pid.output, &control_F1.target,
                                   control_F1.chill_pid.Kp, control_F1.chill_pid.Ki, control_F1.chill_pid.Kd, 0, 1);
     control_F1.chill_pid.pid.SetOutputLimits(0, control_F1.chill_pid.max);
     control_F1.chill_pid.pid.SetMode(1);
     control_F1.chill_pid.pid.SetSampleTime(control_F1.chill_pid.window);
 
-    control_F1.heat_pid.pid.Init(&control_F1.tempF, &control_F1.heat_pid.output, &control_F1.target,
+    control_F1.heat_pid.pid.Setup(&control_F1.tempF, &control_F1.heat_pid.output, &control_F1.target,
                                  control_F1.heat_pid.Kp, control_F1.heat_pid.Ki, control_F1.heat_pid.Kd, 0, 1);
     control_F1.heat_pid.pid.SetOutputLimits(0, control_F1.heat_pid.max);
     control_F1.heat_pid.pid.SetMode(1);
     control_F1.heat_pid.pid.SetSampleTime(control_F1.heat_pid.window);
 
-    control_F2.chill_pid.pid.Init(&control_F2.tempF, &control_F2.chill_pid.output, &control_F2.target,
+    control_F2.chill_pid.pid.Setup(&control_F2.tempF, &control_F2.chill_pid.output, &control_F2.target,
                                   control_F2.chill_pid.Kp, control_F2.chill_pid.Ki, control_F2.chill_pid.Kd, 0, 1);
     control_F2.chill_pid.pid.SetOutputLimits(0, control_F2.chill_pid.max);
     control_F2.chill_pid.pid.SetMode(1);
     control_F2.chill_pid.pid.SetSampleTime(control_F2.chill_pid.window);
 
-    control_F2.heat_pid.pid.Init(&control_F2.tempF, &control_F2.heat_pid.output, &control_F2.target,
+    control_F2.heat_pid.pid.Setup(&control_F2.tempF, &control_F2.heat_pid.output, &control_F2.target,
                                  control_F2.heat_pid.Kp, control_F2.heat_pid.Ki, control_F2.heat_pid.Kd, 0, 1);
     control_F2.heat_pid.pid.SetOutputLimits(0, control_F2.heat_pid.max);
     control_F2.heat_pid.pid.SetMode(1);
     control_F2.heat_pid.pid.SetSampleTime(control_F2.heat_pid.window);
 
-    control_Heater.heat_pid.pid.Init(&control_Heater.tempF, &control_Heater.heat_pid.output, &control_Heater.target,
+    control_Heater.heat_pid.pid.Setup(&control_Heater.tempF, &control_Heater.heat_pid.output, &control_Heater.target,
                                      control_Heater.heat_pid.Kp, control_Heater.heat_pid.Ki, control_Heater.heat_pid.Kd, 1, 0);
     control_Heater.heat_pid.pid.SetOutputLimits(0, control_Heater.heat_pid.max);
     control_Heater.heat_pid.pid.SetMode(1);
@@ -797,8 +797,8 @@ void update_control(TemperatureControl *control)
 
         // positive -> needs cold
         //  or we're in a cooling loop and within hysterisis
-        if (control->error > 0 
-        || (abs(control->error) <= control->hysterisis 
+        if (control->error > 0
+        || (abs(control->error) <= control->hysterisis
         && ( control->mode & AUTO_MODE_PID ) > 0 && control->last_action == ACTION_CHILL))
         {
             if ((control->mode & AUTO_MODE_CHILL) > 0)
@@ -835,8 +835,8 @@ void update_control(TemperatureControl *control)
                 // above temp, chill disabled, nothing to do
             }
         }
-        else if (control->error < 0 
-        || (abs(control->error) <= control->hysterisis 
+        else if (control->error < 0
+        || (abs(control->error) <= control->hysterisis
         && (control->mode & AUTO_MODE_PID) > 0 && control->last_action == ACTION_HEAT))
         {
             if ((control->mode & AUTO_MODE_HEAT) > 0)
@@ -1622,7 +1622,7 @@ void ppublish(String message, ...)
     va_list args;
     va_start(args, message);
     vsnprintf(buffer, 50, message.c_str(), args);
-    Particle.publish("chronicle", buffer);
+    Particle.publish("chronicle", buffer, PRIVATE);
 
     va_end(args);
 }
