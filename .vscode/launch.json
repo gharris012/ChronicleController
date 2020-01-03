@@ -9,12 +9,12 @@
             "interface": "swd",
             "device": "STM32F205RG",
             "cwd": "${workspaceRoot}",
-            "executable": "${command:extension.getDebuggerExecutable}",
+            "executable": "${command:particle.getDebuggerExecutable}",
             "preLaunchTask": "Particle: Flash application for debug (local)",
-            "armToolchainPath": "${command:extension.getDebuggerCompilerDir}",
-            "svdFile": "${command:extension.getDebuggerSVDFile}",
+            "armToolchainPath": "${command:particle.getDebuggerCompilerDir}",
+            "svdFile": "${command:particle.getDebuggerSVDFile}",
             "searchDir": [
-                "${command:extension.getDebuggerSearchDir}"
+                "${command:particle.getDebuggerSearchDir}"
             ],
             "configFiles": [
                 "interface/cmsis-dap.cfg",
@@ -33,21 +33,24 @@
         {
             "type": "cortex-debug",
             "request": "attach",
-            "name": "Particle Debugger (argon, boron, xenon)",
+            "name": "Particle Debugger (argon, boron / bsom, xenon)",
             "servertype": "openocd",
             "interface": "swd",
             "device": "nRF52840_xxAA",
             "cwd": "${workspaceRoot}",
-            "executable": "${command:extension.getDebuggerExecutable}",
+            "executable": "${command:particle.getDebuggerExecutable}",
             "preLaunchTask": "Particle: Flash application for debug (local)",
-            "armToolchainPath": "${command:extension.getDebuggerCompilerDir}",
-            "svdFile": "${command:extension.getDebuggerSVDFile}",
+            "armToolchainPath": "${command:particle.getDebuggerCompilerDir}",
+            "svdFile": "${command:particle.getDebuggerSVDFile}",
             "searchDir": [
-                "${command:extension.getDebuggerSearchDir}"
+                "${command:particle.getDebuggerSearchDir}"
             ],
             "configFiles": [
                 "interface/cmsis-dap.cfg",
                 "target/nrf52-particle.cfg"
+            ],
+            "postAttachCommands": [
+                "monitor reset halt"
             ],
             "windows": {
                 "configFiles": [
@@ -64,12 +67,12 @@
             "interface": "swd",
             "device": "STM32F205RG",
             "cwd": "${workspaceRoot}",
-            "executable": "${command:extension.getDebuggerExecutable}",
+            "executable": "${command:particle.getDebuggerExecutable}",
             "preLaunchTask": "Particle: Flash application for debug (local)",
-            "armToolchainPath": "${command:extension.getDebuggerCompilerDir}",
-            "svdFile": "${command:extension.getDebuggerSVDFile}",
+            "armToolchainPath": "${command:particle.getDebuggerCompilerDir}",
+            "svdFile": "${command:particle.getDebuggerSVDFile}",
             "searchDir": [
-                "${command:extension.getDebuggerSearchDir}"
+                "${command:particle.getDebuggerSearchDir}"
             ],
             "configFiles": [
                 "interface/particle-ftdi.cfg",

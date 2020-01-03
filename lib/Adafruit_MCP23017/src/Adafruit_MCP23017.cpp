@@ -1,4 +1,4 @@
-/***************************************************
+/*************************************************** 
  This is a library for the MCP23017 i2c port expander
 
  These displays use I2C to communicate, 2 pins are required to
@@ -9,19 +9,41 @@
 
  Written by Limor Fried/Ladyada for Adafruit Industries.
  BSD license, all text above must be included in any redistribution
-
+ 
  Adapted for Spark Core by Paul Kourany, Sept 3, 2014
  ****************************************************/
 
+#if defined (PARTICLE)
 #include "Adafruit_MCP23017.h"
+#else
+#include <Wire.h>
+#ifdef __AVR__
+#include <avr/pgmspace.h>
+#endif
+#include "Adafruit_MCP23017.h"
+
+#if ARDUINO >= 100
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#endif
+#endif //Particle
 
 // minihelper to keep Arduino backward compatibility
 static inline void wiresend(uint8_t x) {
-    Wire.write((uint8_t) x);
+#if (defined (ARDUINO) && ARDUINO >= 100) || defined (PARTICLE)
+	Wire.write((uint8_t) x);
+#else
+	Wire.send(x);
+#endif
 }
 
 static inline uint8_t wirerecv(void) {
+#if (defined (ARDUINO) && ARDUINO >= 100) || defined (PARTICLE)
 	return Wire.read();
+#else
+	return Wire.receive();
+#endif
 }
 
 /**

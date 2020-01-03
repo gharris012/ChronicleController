@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "d00"
+#define APP_VERSION "dh1"
 
 // A/C Thermostat Heater pin
 #define OWNPIN D6
@@ -27,9 +27,8 @@
 #define ACTION_CHILL 2
 #define ACTION_HEAT 4
 #define BUTTON_COUNT 6
-#define NULL 0
 
-#include "application.h"
+#include "Particle.h"
 #include <stdlib.h>
 #include <math.h>
 #include "Button.h"
@@ -147,8 +146,8 @@ struct Chiller
     // we will monitor the heater temperature
     //  when it is above control_set_temperature, we will assume the a/c is on
     //  when it is below, we will assume the a/c is off
-    int min_on_time;    // minimum time for the chiller to be on
-    int min_off_time;   // minimum time for the chiller to be off
+    unsigned int min_on_time;    // minimum time for the chiller to be on
+    unsigned int min_off_time;   // minimum time for the chiller to be off
 
     int control_set_temperature;   // what the a/c control unit is set to .. we need to set
                                    // the heater above this to make the unit kick on,
