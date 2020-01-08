@@ -8,20 +8,32 @@
 #define LCDLINELENGTH 10
 #define LCDLINEHEIGHT 16
 #define LCDBLANKLINE "          "
+
 #define AUTO_MODE_ON 1
 #define AUTO_MODE_OFF 2
 #define AUTO_MODE_PID 4
 #define AUTO_MODE_AUTO 8
 #define AUTO_MODE_CHILL 16
 #define AUTO_MODE_HEAT 32
-#define MENU_ON AUTO_MODE_ON
-#define MENU_OFF AUTO_MODE_OFF
-#define MENU_PID AUTO_MODE_PID        // PID control
-#define MENU_AUTO AUTO_MODE_AUTO      // Dumb auto : setpoint, threshold min/max
-#define MENU_PCHILL AUTO_MODE_PID | AUTO_MODE_CHILL   // PID - Chiller only
-#define MENU_PHEAT AUTO_MODE_PID | AUTO_MODE_HEAT     // PID - Heater only
-#define MENU_ACHILL AUTO_MODE_AUTO | AUTO_MODE_CHILL   // Auto - Chiller only
-#define MENU_AHEAT AUTO_MODE_AUTO | AUTO_MODE_HEAT     // Auto - Heater only
+
+#define MENU_ON 1
+#define MENU_OFF 2
+#define MENU_PID 3
+#define MENU_AUTO 4
+#define MENU_AHEAT 5
+#define MENU_ACHILL 6
+#define MENU_PHEAT 7
+#define MENU_PCHILL 8
+
+#define MENU_ON_MODE AUTO_MODE_ON
+#define MENU_OFF_MODE AUTO_MODE_OFF
+#define MENU_PID_MODE AUTO_MODE_PID        // PID control
+#define MENU_AUTO_MODE AUTO_MODE_AUTO      // Dumb auto : setpoint, threshold min/max
+#define MENU_PCHILL_MODE AUTO_MODE_PID | AUTO_MODE_CHILL   // PID - Chiller only
+#define MENU_PHEAT_MODE AUTO_MODE_PID | AUTO_MODE_HEAT     // PID - Heater only
+#define MENU_ACHILL_MODE AUTO_MODE_AUTO | AUTO_MODE_CHILL   // Auto - Chiller only
+#define MENU_AHEAT_MODE AUTO_MODE_AUTO | AUTO_MODE_HEAT     // Auto - Heater only
+
 #define CONTROL_HIGH_DIFFERENTIAL 10  // error > DIFFERENTIAL -> high differential
 #define ACTION_NONE 1
 #define ACTION_CHILL 2

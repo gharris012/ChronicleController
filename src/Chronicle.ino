@@ -37,7 +37,6 @@ Logger LogPID("app.control.pid");
 // == [ setup ] ==
 
 bool ds_temp_sensor_is_converting = FALSE;
-unsigned long int ds_temp_sensor_convert_complete_time = 0;
 const byte DS_TEMP_SENSOR_CONVERT_DURATION = 250;
 const unsigned long int DS_TEMP_GRACE_PERIOD = 60000; // if we haven't gotten a valid temp in this amount of time, mark it as disconnected
 const float INVALID_TEMPERATURE = -123;
@@ -509,24 +508,34 @@ void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size)
 
 void mode_as_string(byte mode, char *buffer, byte buffer_size)
 {
-    if (mode == AUTO_MODE_ON)
+    switch (mode)
     {
+    case MENU_ON_MODE:
         snprintf(buffer, buffer_size, "ON");
-    }
-    else if (mode == AUTO_MODE_OFF)
-    {
+        break;
+    case MENU_OFF_MODE:
         snprintf(buffer, buffer_size, "OFF");
-    }
-    else if (mode == AUTO_MODE_AUTO)
-    {
-        snprintf(buffer, buffer_size, "AT");
-    }
-    else if (mode == AUTO_MODE_PID)
-    {
-        snprintf(buffer, buffer_size, "AP");
-    }
-    else
-    {
+        break;
+    case MENU_AUTO_MODE:
+        snprintf(buffer, buffer_size, "AA");
+        break;
+    case MENU_PID_MODE:
+        snprintf(buffer, buffer_size, "PA");
+        break;
+    case MENU_AHEAT_MODE:
+        snprintf(buffer, buffer_size, "AH");
+        break;
+    case MENU_ACHILL_MODE:
+        snprintf(buffer, buffer_size, "AC");
+        break;
+    case MENU_PHEAT_MODE:
+        snprintf(buffer, buffer_size, "PH");
+        break;
+    case MENU_PCHILL_MODE:
+        snprintf(buffer, buffer_size, "PC");
+        break;
+
+    default:
         snprintf(buffer, buffer_size, "UN");
     }
 }
@@ -793,6 +802,33 @@ void update_control(TemperatureControl *control)
         {
             if ((control->mode & AUTO_MODE_HEAT) > 0)
             {
+                if ((control->mode & AUTO_MODE_PID) > 0)
+                {
+                    if (compute_pid(&control->heat_pid))
+                    {
+                        if (control->heat_pid.publish_results)
+                        {
+                            char buffer[50];
+                            snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->heat_pid.output_original, control->heat_pid.output, control->heat_pid.adjustedFlag);
+                            ppublish(buffer);
+                            LogPID.trace(buffer);
+                        }
+                    }
+                    // as long as we stay within hysterisis, keep action_heat
+                    control->action = ACTION_HEAT;
+                }
+                else if ((control->mode & AUTO_MODE_AUTO) > 0)
+                {
+                    if (abs(control->error) > control->hysterisis)
+                    {
+                        control->action = ACTION_HEAT;
+                    }
+                    else
+                    {
+                        control->action = ACTION_NONE;
+                    }
+                }
+
             }
             else
             {
@@ -803,17 +839,6 @@ void update_control(TemperatureControl *control)
         {
             // at temp, things disabled? nothing to do
             LogPID.info("%s control: error: %3.2f ; action: %d ; last_action: %d nothing to do", control->name, control->error, control->action, control->last_action);
-        }
-
-        if (compute_pid(&control->chill_pid))
-        {
-            if (control->chill_pid.publish_results)
-            {
-                char buffer[50];
-                snprintf(buffer, 50, "%s PID: %3.2f %3.2f %3.2f %d", control->name, control->error, control->chill_pid.output_original, control->chill_pid.output, control->chill_pid.adjustedFlag);
-                ppublish(buffer);
-                LogPID.trace(buffer);
-            }
         }
     }
 }
@@ -891,7 +916,7 @@ void update_chiller()
 
         // if we're off, kick on when we get over target+threshold
         // if we're on, stay on until we are below target-threshold
-        if ((chiller.state == FALSE && chiller.dstempsensor->tempF > (chiller.target + threshold_high)) 
+        if ((chiller.state == FALSE && chiller.dstempsensor->tempF > (chiller.target + threshold_high))
             || (chiller.state == TRUE && chiller.dstempsensor->tempF > (chiller.target - threshold_low)))
         {
             state = TRUE;
@@ -1019,6 +1044,7 @@ void run_controls()
 // determine, right now, if a control should be on/off
 void run_control(TemperatureControl *control)
 {
+    control->last_action = 0;
     if ((control->mode & AUTO_MODE_PID) > 0)
     {
         if ((control->action & ACTION_CHILL) > 0 )
@@ -1044,7 +1070,7 @@ void run_control(TemperatureControl *control)
             }
         }
 
-        control->last_action = control->action;
+        control->last_action |= control->action;
         control->action = ACTION_NONE;
     }
     else if ((control->mode & AUTO_MODE_AUTO) > 0)
@@ -1065,7 +1091,7 @@ void run_control(TemperatureControl *control)
                 actuate(&control->chiller, FALSE);
             }
         }
-        control->last_action = control->action;
+        control->last_action |= control->action;
         control->action = ACTION_NONE;
     }
     else if ((control->mode & AUTO_MODE_ON) > 0)
@@ -1292,7 +1318,7 @@ void read_ds_temperatures()
     else if (!done_converting)
     {
         timer.setTimeout(DS_TEMP_SENSOR_CONVERT_DURATION, read_ds_temperatures);
-    }    
+    }
 }
 
 #define TEMPSAMPLES 10
@@ -1525,11 +1551,28 @@ BLYNK_WRITE(V0)
         ppublish("blynk -> turning everything off.");
     }
 }
+
+int menu_as_mode(int menu)
+{
+    switch (menu)
+    {
+        case MENU_OFF: return MENU_OFF_MODE;
+        case MENU_ON: return MENU_ON_MODE;
+        case MENU_PID: return MENU_PID_MODE;
+        case MENU_AUTO: return MENU_AUTO_MODE;
+        case MENU_PHEAT: return MENU_PHEAT_MODE;
+        case MENU_PCHILL: return MENU_PCHILL_MODE;
+        case MENU_AHEAT: return MENU_AHEAT_MODE;
+        case MENU_ACHILL: return MENU_ACHILL_MODE;
+        default: return MENU_OFF_MODE;
+    }
+}
+
 BLYNK_WRITE(V5)
 {
     int y = param.asInt();
     char buf[5];
-    fermenters[F_FERMENTER_1].control->mode = y;
+    fermenters[F_FERMENTER_1].control->mode = menu_as_mode(y);
     mode_as_string(y, buf, 5);
     Log.info("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_1].name, buf);
     ppublish("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_1].name, buf);
@@ -1538,7 +1581,7 @@ BLYNK_WRITE(V6)
 {
     int y = param.asInt();
     char buf[5];
-    fermenters[F_FERMENTER_2].control->mode = y;
+    fermenters[F_FERMENTER_2].control->mode = menu_as_mode(y);
     mode_as_string(y, buf, 5);
     Log.info("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_2].name, buf);
     ppublish("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_2].name, buf);
