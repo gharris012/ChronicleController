@@ -1,64 +1,85 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "r1.8"
-
-#define AIO_SERVER "io.adafruit.com"
-#define AIO_SERVERPORT 1883
+#define APP_VERSION "r2.0"
 
 // A/C Thermostat Heater pin
 #define OWNPIN D6
 #define LCDLINELENGTH 10
 #define LCDLINEHEIGHT 16
 #define LCDBLANKLINE "          "
+
 #define AUTO_MODE_ON 1
 #define AUTO_MODE_OFF 2
-#define AUTO_MODE_PID 3
-#define AUTO_MODE_AUTO 4
-#define MENU_ON AUTO_MODE_ON
-#define MENU_OFF AUTO_MODE_OFF
-#define MENU_PID AUTO_MODE_PID       // PID control
-#define MENU_AUTO AUTO_MODE_AUTO     // Dumb auto : setpoint, threshold min/max
-#define CONTROL_HIGH_DIFFERENTIAL 10 // error > DIFFERENTIAL -> high differential
+#define AUTO_MODE_PID 4
+#define AUTO_MODE_AUTO 8
+#define AUTO_MODE_CHILL 16
+#define AUTO_MODE_HEAT 32
+
+#define MENU_OFF 1
+#define MENU_AUTO 2
+#define MENU_PID 3
+#define MENU_ON_CHILL 4
+#define MENU_ON_HEAT 5
+#define MENU_AUTO_CHILL 6
+#define MENU_AUTO_HEAT 7
+#define MENU_PID_CHILL 8
+#define MENU_PID_HEAT 9
+
+#define CONTROL_MODE_OFF AUTO_MODE_OFF
+#define CONTROL_MODE_ON_CHILL   AUTO_MODE_ON | AUTO_MODE_CHILL
+#define CONTROL_MODE_ON_HEAT    AUTO_MODE_ON | AUTO_MODE_HEAT
+
+// PID control
+#define CONTROL_MODE_PID        AUTO_MODE_PID | AUTO_MODE_CHILL | AUTO_MODE_HEAT
+#define CONTROL_MODE_PID_CHILL  AUTO_MODE_PID | AUTO_MODE_CHILL
+#define CONTROL_MODE_PID_HEAT   AUTO_MODE_PID | AUTO_MODE_HEAT
+
+// Dumb auto : setpoint, threshold min/max
+#define CONTROL_MODE_AUTO       AUTO_MODE_AUTO | AUTO_MODE_CHILL | AUTO_MODE_HEAT
+#define CONTROL_MODE_AUTO_CHILL AUTO_MODE_AUTO | AUTO_MODE_CHILL
+#define CONTROL_MODE_AUTO_HEAT  AUTO_MODE_AUTO | AUTO_MODE_HEAT
+
+
+#define CONTROL_HIGH_DIFFERENTIAL 10  // error > DIFFERENTIAL -> high differential
+#define ACTION_NONE 1
+#define ACTION_CHILL 2
+#define ACTION_HEAT 4
 #define BUTTON_COUNT 6
 
-#include "application.h"
+#include "Particle.h"
+#include <stdlib.h>
 #include <math.h>
-#include "lib/Button.h"
-#include "lib/Adafruit_GFX.h"
-#include "lib/Adafruit_SSD1306.h"
-#include "lib/Adafruit_MCP23017.h"
-#include "lib/OneWire.h"
-#include "lib/pid.h"
-#include "lib/Adafruit_MQTT_SPARK.h"
-#include "lib/Adafruit_MQTT.h"
-#include "lib/httpclient2.h"
+#include "Button.h"
+#include "Adafruit_SSD1306.h"
+#include "Adafruit_MCP23017.h"
+#include "OneWire.h"
+#include "pid.h"
+#include "HttpClient.h"
 
-typedef struct DSTempSensor
+struct DSTempSensor
 {
     char name[10];
     uint8_t addr[8];
     uint8_t blynkPin;
-    Adafruit_MQTT_Publish *aioFeed;
 
     float tempF;
 
     float last_tempF;
     int last_valid_read;
     bool present;
-} DSTempSensor;
+};
 
-typedef struct Thermistor
+struct Thermistor
 {
     char name[10];
     byte pin;
     float tempF;
 
     uint8_t blynkPin;
-    Adafruit_MQTT_Publish *aioFeed;
-} Thermistor;
+};
 
-typedef struct Actuator
+struct Actuator
 {
     char name[10];
     bool isMcp;
@@ -71,39 +92,56 @@ typedef struct Actuator
 
     bool state;
     unsigned long timer_last;
-} Actuator;
+};
 
-typedef struct TemperatureControl
+struct PIDControl
 {
-    char name[10];
-
-    DSTempSensor *dstempsensor;
-    Thermistor *thermistor;
-    byte mode; // 1 - ON ; 2 - OFF ; 3 - AUTO
-    Actuator actuator;
-
-    double tempF;
-
     PID pid;
-    double target;
-    double input;        // yes, this is redundant with tempF, if we run out of memory it can be optimized
-    double output;
-    double error;
+    double Kp;
+    double Ki;
+    double Kd;
 
-    bool publish_pid_results;
+	double output;
+	double output_original;
+	int adjustedFlag;
+
+    bool publish_results;
 
     int min;
     int max;
     int window;
     unsigned long window_start;
     unsigned long window_end;
+};
 
-    double Kp;
-    double Ki;
-    double Kd;
-} TemperatureControl;
+struct TemperatureControl
+{
+    char name[10];
 
-typedef struct Chiller
+    DSTempSensor *dstempsensor;
+    Thermistor *thermistor;
+    byte mode;  // see CONTROL_ defines
+    uint8_t blynkMenuPin;
+    uint8_t blynkChillOutputPin;
+    uint8_t blynkHeatOutputPin;
+    uint8_t blynkCompositeOutputPin;
+    int8_t blynkLastComposite;
+    Actuator heater;
+    Actuator chiller;
+
+    uint8_t action; // see ACTION_ defines
+    uint8_t last_action;
+
+    double tempF;
+    double target;
+    double error;
+    double hysterisis;
+
+    PIDControl heat_pid;
+    PIDControl chill_pid;
+};
+
+struct Chiller
 {
     char name[10];
 
@@ -132,8 +170,8 @@ typedef struct Chiller
     // we will monitor the heater temperature
     //  when it is above control_set_temperature, we will assume the a/c is on
     //  when it is below, we will assume the a/c is off
-    int min_on_time;    // minimum time for the chiller to be on
-    int min_off_time;   // minimum time for the chiller to be off
+    unsigned int min_on_time;    // minimum time for the chiller to be on
+    unsigned int min_off_time;   // minimum time for the chiller to be off
 
     int control_set_temperature;   // what the a/c control unit is set to .. we need to set
                                    // the heater above this to make the unit kick on,
@@ -146,13 +184,13 @@ typedef struct Chiller
                                     // the chiller turns off
 
     unsigned long timer_last;
-} Chiller;
+};
 
-typedef struct Fermenter
+struct Fermenter
 {
     char name[10];
     TemperatureControl *control;
-} Fermenter;
+};
 
 float readTempC(DSTempSensor *dstemp);
 float readTempC(Thermistor *thermistor);
@@ -162,9 +200,10 @@ void resetOWN();
 void scanOWN();
 void read_temperatures();
 void read_ds_temperatures();
-void setup_pids();
-void update_pids();
-void update_pid(TemperatureControl *control);
+bool compute_pid(PIDControl *pid);
+void setup_controls();
+void update_controls();
+void update_control(TemperatureControl *control);
 void update_chiller();
 void run_controls();
 void run_control(TemperatureControl *control);
@@ -175,7 +214,6 @@ void chiller_fan_off();
 void chiller_check_heater();
 void all_off();
 void update_display();
-void update_aio();
 void update_blynk();
 void check_memory();
 
@@ -185,14 +223,5 @@ void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size);
 void mode_as_string(byte mode, char *buffer, byte buffer_size);
 void tempF_for_display(float tempF, char buffer[], byte buffer_size);
 
-
-void ppublish(String message);
-void ppublish(String message, int value);
-void ppublish(String message, int value, unsigned long int value2);
-void ppublish(String message, int value, int value2, int value3);
-void ppublish(String message, float value);
-void ppublish(String message, const char *value);
-void ppublish(String message, const char *value, int value2);
-void ppublish(String message, const char *value, const char *value2);
-
+void ppublish(String message, ...);
 #endif
