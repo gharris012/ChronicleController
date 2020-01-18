@@ -429,7 +429,7 @@ void blynk_report_fermenter(Fermenter *fermenter)
         reportHeat = 0;
         reportChill = 0;
     }
-    else if (fermenter->control->mode == AUTO_MODE_AUTO)
+    else if ((fermenter->control->mode & AUTO_MODE_AUTO) > 0)
     {
         reportHeat = (fermenter->control->heater.state ? 100 : 0);
         reportChill = (fermenter->control->chiller.state ? 100 : 0);
@@ -848,7 +848,7 @@ void update_control(TemperatureControl *control)
                 }
                 else if ((control->mode & AUTO_MODE_AUTO) > 0)
                 {
-                    if (abs(control->error) > control->hysterisis)
+                    if (abs(control->error) >= control->hysterisis)
                     {
                         control->action = ACTION_CHILL;
                     }
@@ -887,7 +887,7 @@ void update_control(TemperatureControl *control)
                 }
                 else if ((control->mode & AUTO_MODE_AUTO) > 0)
                 {
-                    if (abs(control->error) > control->hysterisis)
+                    if (abs(control->error) >= control->hysterisis)
                     {
                         control->action = ACTION_HEAT;
                     }
@@ -1154,9 +1154,13 @@ void run_control(TemperatureControl *control)
                 actuate(&control->heater, FALSE);
             }
         }
+        if ((control->action & ACTION_NONE) >0)
+        {
+            actuate(&control->heater, FALSE);
+            actuate(&control->chiller, FALSE);
+        }
 
         control->last_action |= control->action;
-        control->action = ACTION_NONE;
     }
     else if ((control->mode & AUTO_MODE_AUTO) > 0)
     {
@@ -1176,12 +1180,15 @@ void run_control(TemperatureControl *control)
                 actuate(&control->chiller, FALSE);
             }
         }
+        if ((control->action & ACTION_NONE) >0)
+        {
+            actuate(&control->heater, FALSE);
+            actuate(&control->chiller, FALSE);
+        }
         control->last_action |= control->action;
-        control->action = ACTION_NONE;
     }
     else if ((control->mode & AUTO_MODE_ON) > 0)
     {
-        control->last_action = 0;
         if ((control->mode & AUTO_MODE_CHILL) > 0)
         {
             actuate(&control->chiller, TRUE);
@@ -1192,7 +1199,6 @@ void run_control(TemperatureControl *control)
             actuate(&control->heater, TRUE);
             control->last_action |= ACTION_HEAT;
         }
-        control->action = ACTION_NONE;
     }
     else if ((control->mode & AUTO_MODE_OFF) > 0)
     {
@@ -1319,9 +1325,11 @@ void all_off()
     //turn off the pumps immediately
     control_F1.mode = AUTO_MODE_OFF;
     actuate(&control_F1.chiller, FALSE, TRUE);
+    actuate(&control_F1.heater, FALSE, TRUE);
 
     control_F2.mode = AUTO_MODE_OFF;
     actuate(&control_F2.chiller, FALSE, TRUE);
+    actuate(&control_F2.heater, FALSE, TRUE);
 
     chiller.mode = AUTO_MODE_OFF;
     // update chiller immediately
