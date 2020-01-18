@@ -816,11 +816,11 @@ void update_control(TemperatureControl *control)
     {
         control->error = control->target - control->tempF;
 
-        // negative -> needs heat
+        // negative -> needs cold
 
-        // positive -> needs cold
+        // positive -> needs heat
         //  or we're in a cooling loop and within hysterisis
-        if (control->error > 0
+        if (control->error < 0
             || (abs(control->error) <= control->hysterisis
                 && ( control->mode & AUTO_MODE_PID ) > 0 && control->last_action == ACTION_CHILL))
         {
