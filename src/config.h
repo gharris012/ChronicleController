@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "r2.0"
+#define APP_VERSION "r2.1"
 
 // A/C Thermostat Heater pin
 #define OWNPIN D6
@@ -48,8 +48,8 @@
 #define BUTTON_COUNT 6
 
 #include "Particle.h"
-#include <stdlib.h>
-#include <math.h>
+#include <cstdlib>
+#include <cmath>
 #include "Button.h"
 #include "Adafruit_SSD1306.h"
 #include "Adafruit_MCP23017.h"
