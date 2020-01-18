@@ -419,7 +419,7 @@ void blynk_report_fermenter(Fermenter *fermenter)
         {
             reportChill = 100;
         }
-        if ((fermenter->control->mode & AUTO_MODE_CHILL) > 0)
+        if ((fermenter->control->mode & AUTO_MODE_HEAT) > 0)
         {
             reportHeat = 100;
         }
@@ -452,6 +452,8 @@ void blynk_report_fermenter(Fermenter *fermenter)
 
     /// CompositeOutput range is -100 (full chill) to 100 (full heat), 0 is off
     Blynk.virtualWrite(fermenter->control->blynkCompositeOutputPin, reportComposite);
+    Blynk.virtualWrite(fermenter->control->blynkHeatOutputPin, reportHeat);
+    Blynk.virtualWrite(fermenter->control->blynkChillOutputPin, reportChill);
     if (reportComposite != fermenter->control->blynkLastComposite)
     {
         ppublish("Report: %s: %d (c:%d,h:%d)", fermenter->name, reportComposite, reportChill, reportHeat);
