@@ -859,7 +859,7 @@ void update_control(TemperatureControl *control)
                 control->action = ACTION_NONE;
             }
         }
-        else if (control->error < 0
+        else if (control->error > 0
                 || (abs(control->error) <= control->hysterisis
                     && (control->mode & AUTO_MODE_PID) > 0 && control->last_action == ACTION_HEAT))
         {
