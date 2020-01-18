@@ -4,8 +4,6 @@
 
 #include "application.h"
 #line 1 "c:/Users/gharr/Documents/particle/ChronicleController/src/Chronicle.ino"
-// == [ includes ] ==
-
 #include "config.h"
 #include "keys.h"
 #include <blynk.h>
@@ -20,6 +18,7 @@ void tempF_for_display(float tempF, char buffer[], byte buffer_size);
 void mode_for_display(bool state, char *buffer, byte buffer_size);
 void mode_for_display(bool state, float tempF, char *buffer, byte buffer_size);
 void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size);
+void action_as_string(byte mode, char *buffer, byte buffer_size);
 void mode_as_string(byte mode, char *buffer, byte buffer_size);
 void resetOWN();
 void scanOWN();
@@ -47,7 +46,7 @@ void button_onRelease(Button *button);
 void button_onLongClick(Button *button);
 void button_onClick(Button *button);
 int menu_as_mode(int menu);
-#line 8 "c:/Users/gharr/Documents/particle/ChronicleController/src/Chronicle.ino"
+#line 6 "c:/Users/gharr/Documents/particle/ChronicleController/src/Chronicle.ino"
 Adafruit_MCP23017 mcp;
 byte achState = LOW;
 Adafruit_SSD1306 display(-1);
@@ -269,16 +268,6 @@ void setup()
 
     Log.info("Setting up OWN");
     scanOWN();
-    // set resolution for all ds temp sensors
-    own.reset();
-    own.skip();
-    own.write(0x4E); // Write scratchpad
-    own.write(0);    // TL
-    own.write(0);    // TH
-    own.write(0x3F); // 10-bit resolution
-    own.write(0x48); // Copy Scratchpad
-    own.write(0x44); // start conversion
-    own.reset();
 
     setup_controls();
 
@@ -549,6 +538,25 @@ void mode_for_display(byte mode, float tempF, char *buffer, byte buffer_size)
     }
 }
 
+void action_as_string(byte mode, char *buffer, byte buffer_size)
+{
+    switch (mode)
+    {
+        case ACTION_NONE:
+            snprintf(buffer, buffer_size, "none");
+            break;
+        case ACTION_HEAT:
+            snprintf(buffer, buffer_size, "heat");
+            break;
+        case ACTION_CHILL:
+            snprintf(buffer, buffer_size, "chill");
+            break;
+        default:
+            snprintf(buffer, buffer_size, "unk");
+            break;
+    }
+}
+
 void mode_as_string(byte mode, char *buffer, byte buffer_size)
 {
     switch (mode)
@@ -640,6 +648,17 @@ void scanOWN()
             ppublish("Sensor not found! %s at %d", ds_temp_sensor[i].name, i);
         }
     }
+
+    // set resolution for ds temp sensors
+    own.reset();
+    own.skip();
+    own.write(0x4E); // Write scratchpad
+    own.write(0);    // TL
+    own.write(0);    // TH
+    own.write(0x3F); // 10-bit resolution
+    own.write(0x48); // Copy Scratchpad
+    own.write(0x44); // start conversion
+    own.reset();
 
     own.reset_search();
 }
@@ -802,10 +821,19 @@ void update_control(TemperatureControl *control)
     }
     else
     {
+        ppublish("No temperature source for %s!", control->name);
         Log.warn(" no temperature source!");
+        control->tempF = INVALID_TEMPERATURE;
     }
 
-    if (control->tempF != INVALID_TEMPERATURE)
+    if (control->tempF == INVALID_TEMPERATURE)
+    {
+        ppublish("Invalid temperature reading for %s!", control->name);
+        Log.warn("Invalid temperature reading for %s!", control->name);
+        control->action = ACTION_NONE;
+        control->error = 0;
+    }
+    else
     {
         control->error = control->target - control->tempF;
 
@@ -849,6 +877,7 @@ void update_control(TemperatureControl *control)
             else
             {
                 // above temp, chill disabled, nothing to do
+                control->action = ACTION_NONE;
             }
         }
         else if (control->error < 0
@@ -888,6 +917,7 @@ void update_control(TemperatureControl *control)
             else
             {
                 // below temp, heat disabled, nothing to do
+                control->action = ACTION_NONE;
             }
         }
         else
@@ -896,6 +926,18 @@ void update_control(TemperatureControl *control)
             LogPID.info("%s control: error: %3.2f ; action: %d ; last_action: %d nothing to do", control->name, control->error, control->action, control->last_action);
         }
     }
+
+    char buffer[50];
+    char actbuf[5];
+    char lastactbuf[5];
+    action_as_string(control->action, actbuf, 5);
+    action_as_string(control->last_action, lastactbuf, 5);
+    snprintf(buffer, 50, "%s: e:%3.2f; a:%s; l:%s", control->name,
+        control->error,
+        actbuf,
+        lastactbuf);
+    ppublish(buffer);
+    LogPID.trace(buffer);
 }
 
 // this puppy is special
@@ -1628,18 +1670,18 @@ BLYNK_WRITE(V5)
     int y = param.asInt();
     char buf[5];
     fermenters[F_FERMENTER_1].control->mode = menu_as_mode(y);
-    mode_as_string(y, buf, 5);
-    Log.info("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_1].name, buf);
-    ppublish("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_1].name, buf);
+    mode_as_string(fermenters[F_FERMENTER_1].control->mode, buf, 5);
+    Log.info("blynk -> Setting %s Mode to %s (%d->%d)", fermenters[F_FERMENTER_1].name, buf, y, fermenters[F_FERMENTER_1].control->mode);
+    ppublish("blynk -> Setting %s Mode to %s (%d->%d)", fermenters[F_FERMENTER_1].name, buf, y, fermenters[F_FERMENTER_1].control->mode);
 }
 BLYNK_WRITE(V6)
 {
     int y = param.asInt();
     char buf[5];
     fermenters[F_FERMENTER_2].control->mode = menu_as_mode(y);
-    mode_as_string(y, buf, 5);
-    Log.info("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_2].name, buf);
-    ppublish("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_2].name, buf);
+    mode_as_string(fermenters[F_FERMENTER_2].control->mode, buf, 5);
+    Log.info("blynk -> Setting %s Mode to %s (%d->%d)", fermenters[F_FERMENTER_2].name, buf, y, fermenters[F_FERMENTER_2].control->mode);
+    ppublish("blynk -> Setting %s Mode to %s (%d->%d)", fermenters[F_FERMENTER_2].name, buf, y, fermenters[F_FERMENTER_2].control->mode);
 }
 BLYNK_WRITE(V7)
 {

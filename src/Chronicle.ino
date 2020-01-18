@@ -1626,18 +1626,18 @@ BLYNK_WRITE(V5)
     int y = param.asInt();
     char buf[5];
     fermenters[F_FERMENTER_1].control->mode = menu_as_mode(y);
-    mode_as_string(y, buf, 5);
-    Log.info("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_1].name, buf);
-    ppublish("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_1].name, buf);
+    mode_as_string(fermenters[F_FERMENTER_1].control->mode, buf, 5);
+    Log.info("blynk -> Setting %s Mode to %s (%d->%d)", fermenters[F_FERMENTER_1].name, buf, y, fermenters[F_FERMENTER_1].control->mode);
+    ppublish("blynk -> Setting %s Mode to %s (%d->%d)", fermenters[F_FERMENTER_1].name, buf, y, fermenters[F_FERMENTER_1].control->mode);
 }
 BLYNK_WRITE(V6)
 {
     int y = param.asInt();
     char buf[5];
     fermenters[F_FERMENTER_2].control->mode = menu_as_mode(y);
-    mode_as_string(y, buf, 5);
-    Log.info("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_2].name, buf);
-    ppublish("blynk -> Setting %s Mode to %s", fermenters[F_FERMENTER_2].name, buf);
+    mode_as_string(fermenters[F_FERMENTER_2].control->mode, buf, 5);
+    Log.info("blynk -> Setting %s Mode to %s (%d->%d)", fermenters[F_FERMENTER_2].name, buf, y, fermenters[F_FERMENTER_2].control->mode);
+    ppublish("blynk -> Setting %s Mode to %s (%d->%d)", fermenters[F_FERMENTER_2].name, buf, y, fermenters[F_FERMENTER_2].control->mode);
 }
 BLYNK_WRITE(V7)
 {
