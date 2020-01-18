@@ -429,6 +429,11 @@ void blynk_report_fermenter(Fermenter *fermenter)
         reportHeat = 0;
         reportChill = 0;
     }
+    else if (fermenter->control->mode == AUTO_MODE_AUTO)
+    {
+        reportHeat = (fermenter->control->heater.state ? 100 : 0);
+        reportChill = (fermenter->control->chiller.state ? 100 : 0);
+    }
     else if ((fermenter->control->mode & AUTO_MODE_PID) > 0)
     {
         if ((fermenter->control->mode & AUTO_MODE_CHILL) > 0)
@@ -447,7 +452,7 @@ void blynk_report_fermenter(Fermenter *fermenter)
     }
     else
     {
-        reportComposite = reportChill;
+        reportComposite = -1 * reportChill;
     }
 
     /// CompositeOutput range is -100 (full chill) to 100 (full heat), 0 is off
