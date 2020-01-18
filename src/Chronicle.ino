@@ -561,12 +561,15 @@ void scanOWN()
     }
 
     Log.info("Searching OWN");
+    ppublish("Searching OWN");
     if (own.reset() == 1)
     {
         Log.info("Network present");
+        ppublish("OWN Network present");
     }
     else
     {
+        ppublish("OWN Network problem!");
         Log.info("Network problem :(");
     }
 
@@ -586,6 +589,15 @@ void scanOWN()
             }
         }
     }
+    for (i = 0; i < DS_SENSOR_COUNT; i++)
+    {
+        if (!ds_temp_sensor[i].present)
+        {
+            Log.warn("Sensor %s at index %d not found!", ds_temp_sensor[i].name, i);
+            ppublish("Sensor not found! %s at %d", ds_temp_sensor[i].name, i);
+        }
+    }
+
     own.reset_search();
 }
 
@@ -1610,6 +1622,13 @@ BLYNK_WRITE(V13)
     ppublish("blynk -> Setting %s Mode to %s", chiller.name, buf);
     update_chiller();
 }
+BLYNK_WRITE(V25)
+{
+    rescanOWN = true;
+    Log.info("blynk -> scheduling OWN rescan");
+    ppublish("blynk -> scheduling OWN rescan");
+}
+
 
 void ppublish(String message, ...)
 {
