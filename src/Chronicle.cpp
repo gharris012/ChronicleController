@@ -4,6 +4,7 @@
 
 #include "application.h"
 #line 1 "c:/Users/gharr/Documents/particle/ChronicleController/src/Chronicle.ino"
+
 #include "config.h"
 #include "keys.h"
 #include <blynk.h>
@@ -14,6 +15,7 @@ void loop();
 void check_memory();
 void update_display();
 void update_blynk();
+void blynk_report_fermenter(Fermenter *fermenter);
 void tempF_for_display(float tempF, char buffer[], byte buffer_size);
 void mode_for_display(bool state, char *buffer, byte buffer_size);
 void mode_for_display(bool state, float tempF, char *buffer, byte buffer_size);
@@ -45,8 +47,9 @@ void button_onPress(Button *button);
 void button_onRelease(Button *button);
 void button_onLongClick(Button *button);
 void button_onClick(Button *button);
-int menu_as_mode(int menu);
-#line 6 "c:/Users/gharr/Documents/particle/ChronicleController/src/Chronicle.ino"
+byte mode_as_menu(byte mode);
+byte menu_as_mode(byte menu);
+#line 7 "c:/Users/gharr/Documents/particle/ChronicleController/src/Chronicle.ino"
 Adafruit_MCP23017 mcp;
 byte achState = LOW;
 Adafruit_SSD1306 display(-1);
@@ -131,8 +134,13 @@ TemperatureControl control_F1 = {
     &ds_temp_sensor[DS_FERMENTER_1], // ds temp sensor
     NULL,                            // thermistor
     AUTO_MODE_OFF,                   // mode
+    5,                               // blynkMenuPin mode
+    14,                              // blynk chill output pin
+    20,                              // blynk heat output pin
+    24,                              // blynk composite output pin
+    0,                               // blynk last composite reported
 
-    {"F1-Heat", FALSE, TRUE, WPS_F1_HEAT_SOCKET, NULL, FALSE, 18, FALSE, 0},   // actuator - wps
+    {"F1-Heat", FALSE, TRUE, WPS_F1_HEAT_SOCKET, NULL, FALSE, 22, FALSE, 0},   // actuator - wps
     {"F1-Chill", FALSE, TRUE, WPS_F1_CHILL_SOCKET, NULL, FALSE, 18, FALSE, 0}, // actuator - wps
     ACTION_NONE, // action
     ACTION_NONE, // last_action
@@ -153,8 +161,13 @@ TemperatureControl control_F2 = {
     &ds_temp_sensor[DS_FERMENTER_2],                                           // ds temp sensor
     NULL,                                                                      // thermistor
     AUTO_MODE_OFF,                                                             // mode
-    {"F2-Heat", FALSE, TRUE, WPS_F2_HEAT_SOCKET, NULL, FALSE, 18, FALSE, 0},   // actuator - wps
-    {"F2-Chill", FALSE, TRUE, WPS_F2_CHILL_SOCKET, NULL, FALSE, 18, FALSE, 0}, // actuator - wps
+    6,                                                                         // blynkMenuPin mode
+    15,                              // blynk chill output pin
+    21,                              // blynk heat output pin
+    25,                              // blynk composite output pin
+    0,                               // blynk last composite reported
+    {"F2-Heat", FALSE, TRUE, WPS_F2_HEAT_SOCKET, NULL, FALSE, 23, FALSE, 0},   // actuator - wps
+    {"F2-Chill", FALSE, TRUE, WPS_F2_CHILL_SOCKET, NULL, FALSE, 19, FALSE, 0}, // actuator - wps
     ACTION_NONE, // action
     ACTION_NONE, // last_action
 
@@ -173,7 +186,12 @@ TemperatureControl control_Heater = {
     NULL,                       // ds temp sensor
     &thermistors[THERM_HEATER], // thermistor
     AUTO_MODE_OFF,              // mode
-
+    // blynk pins
+    0,
+    0,
+    0,
+    0,
+    0,
     {"H-Act", TRUE, FALSE, 8, NULL, FALSE, 0, FALSE, 0}, // actuator - mcp
     {},
 
@@ -422,72 +440,69 @@ void update_blynk()
         }
     }
 
-    // % = 1 / 100 -> 1 %
-    // 10000 / 60000 ->
-
-    // set F1 mode - V5
-    Blynk.virtualWrite(5, fermenters[F_FERMENTER_1].control->mode);
-    // set F2 mode - V6
-    Blynk.virtualWrite(6, fermenters[F_FERMENTER_2].control->mode);
-
-    int blynkReport = 0;
-    if (fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_ON)
-    {
-        blynkReport = 100;
-    }
-    else if (fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_OFF)
-    {
-        blynkReport = 0;
-    }
-    else if (fermenters[F_FERMENTER_1].control->mode == AUTO_MODE_PID)
-    {
-        // F1 PID Output as % of window
-        blynkReport = ((fermenters[F_FERMENTER_1].control->chill_pid.output / fermenters[F_FERMENTER_1].control->chill_pid.window) * 100);
-    }
-    else
-    {
-        blynkReport = -1;
-    }
-    Blynk.virtualWrite(14, (int)blynkReport);
-    if (blynkReport != blynk_pid_f1_last_report)
-    {
-        ppublish(" Fermenter 1: %d", (int)blynkReport);
-        blynk_pid_f1_last_report = blynkReport;
-    }
-
-    blynkReport = 0;
-    if (fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_ON)
-    {
-        blynkReport = 100;
-    }
-    else if (fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_OFF)
-    {
-        blynkReport = 0;
-    }
-    else if (fermenters[F_FERMENTER_2].control->mode == AUTO_MODE_PID)
-    {
-        // F2 PID Output as % of window
-        blynkReport = ((fermenters[F_FERMENTER_2].control->chill_pid.output / fermenters[F_FERMENTER_2].control->chill_pid.window) * 100);
-    }
-    else
-    {
-        blynkReport = -1;
-    }
-    Blynk.virtualWrite(15, (int)blynkReport);
-    if (blynkReport != blynk_pid_f2_last_report)
-    {
-        ppublish(" Fermenter 2: %d", (int)blynkReport);
-        blynk_pid_f2_last_report = blynkReport;
-    }
+    blynk_report_fermenter(&fermenters[F_FERMENTER_1]);
+    blynk_report_fermenter(&fermenters[F_FERMENTER_2]);
 
     // set chiller mode - V13
-    Blynk.virtualWrite(13, chiller.mode);
+    Blynk.virtualWrite(13, mode_as_menu(chiller.mode));
     // set chill target - V11
     Blynk.virtualWrite(11, chiller.target);
     // set fan status - 1/0 - V12
     Blynk.virtualWrite(chiller.fan.blynkPin, (chiller.fan.state ? 255 : 0));
-    Blynk.virtualWrite(fermenters[F_FERMENTER_1].control->chiller.blynkPin, (fermenters[F_FERMENTER_1].control->chiller.state ? 255 : 0));
-    Blynk.virtualWrite(fermenters[F_FERMENTER_2].control->chiller.blynkPin, (fermenters[F_FERMENTER_2].control->chiller.state ? 255 : 0));
+}
+
+void blynk_report_fermenter(Fermenter *fermenter)
+{
+    Blynk.virtualWrite(fermenter->control->blynkMenuPin, mode_as_menu(fermenter->control->mode));
+    Blynk.virtualWrite(fermenter->control->chiller.blynkPin, (fermenter->control->chiller.state ? 255 : 0));
+    Blynk.virtualWrite(fermenter->control->heater.blynkPin, (fermenter->control->heater.state ? 255 : 0));
+
+    int8_t reportHeat = 0;
+    int8_t reportChill = 0;
+    if ((fermenter->control->mode & AUTO_MODE_ON) > 0)
+    {
+        if ((fermenter->control->mode & AUTO_MODE_CHILL) > 0)
+        {
+            reportChill = 100;
+        }
+        if ((fermenter->control->mode & AUTO_MODE_CHILL) > 0)
+        {
+            reportHeat = 100;
+        }
+    }
+    else if (fermenter->control->mode == AUTO_MODE_OFF)
+    {
+        reportHeat = 0;
+        reportChill = 0;
+    }
+    else if ((fermenter->control->mode & AUTO_MODE_PID) > 0)
+    {
+        if ((fermenter->control->mode & AUTO_MODE_CHILL) > 0)
+        {
+            reportChill = ((fermenter->control->chill_pid.output / fermenter->control->chill_pid.window) * 100);
+        }
+        if ((fermenter->control->mode & AUTO_MODE_HEAT) > 0)
+        {
+            reportHeat = ((fermenter->control->heat_pid.output / fermenter->control->heat_pid.window) * 100);
+        }
+    }
+    int8_t reportComposite = 0;
+    if (reportHeat > reportChill)
+    {
+        reportComposite = reportHeat;
+    }
+    else
+    {
+        reportComposite = reportChill;
+    }
+
+    /// CompositeOutput range is -100 (full chill) to 100 (full heat), 0 is off
+    Blynk.virtualWrite(fermenter->control->blynkCompositeOutputPin, reportComposite);
+    if (reportComposite != fermenter->control->blynkLastComposite)
+    {
+        ppublish("Report: %s: %d (c:%d,h:%d)", fermenter->name, reportComposite, reportChill, reportHeat);
+        fermenter->control->blynkLastComposite = reportComposite;
+    }
 }
 
 void tempF_for_display(float tempF, char buffer[], byte buffer_size)
@@ -561,29 +576,32 @@ void mode_as_string(byte mode, char *buffer, byte buffer_size)
 {
     switch (mode)
     {
-    case MENU_ON_MODE:
-        snprintf(buffer, buffer_size, "ON");
-        break;
-    case MENU_OFF_MODE:
+    case CONTROL_MODE_OFF:
         snprintf(buffer, buffer_size, "OFF");
         break;
-    case MENU_AUTO_MODE:
+    case CONTROL_MODE_ON_CHILL:
+        snprintf(buffer, buffer_size, "OC");
+        break;
+    case CONTROL_MODE_ON_HEAT:
+        snprintf(buffer, buffer_size, "OH");
+        break;
+    case CONTROL_MODE_AUTO:
         snprintf(buffer, buffer_size, "AA");
         break;
-    case MENU_PID_MODE:
+    case CONTROL_MODE_PID:
         snprintf(buffer, buffer_size, "PA");
         break;
-    case MENU_AHEAT_MODE:
-        snprintf(buffer, buffer_size, "AH");
-        break;
-    case MENU_ACHILL_MODE:
+    case CONTROL_MODE_AUTO_CHILL:
         snprintf(buffer, buffer_size, "AC");
         break;
-    case MENU_PHEAT_MODE:
-        snprintf(buffer, buffer_size, "PH");
+    case CONTROL_MODE_AUTO_HEAT:
+        snprintf(buffer, buffer_size, "AH");
         break;
-    case MENU_PCHILL_MODE:
+    case CONTROL_MODE_PID_CHILL:
         snprintf(buffer, buffer_size, "PC");
+        break;
+    case CONTROL_MODE_PID_HEAT:
+        snprintf(buffer, buffer_size, "PH");
         break;
 
     default:
@@ -689,33 +707,38 @@ void display_line(byte line, char *message, bool clear, bool flush)
 void setup_controls()
 {
     control_F1.chill_pid.pid.Setup(&control_F1.tempF, &control_F1.chill_pid.output, &control_F1.target,
-                                  control_F1.chill_pid.Kp, control_F1.chill_pid.Ki, control_F1.chill_pid.Kd, 0, 1);
+                                  control_F1.chill_pid.Kp, control_F1.chill_pid.Ki, control_F1.chill_pid.Kd,
+                                  PID::P_ON_E, PID::REVERSE);
     control_F1.chill_pid.pid.SetOutputLimits(0, control_F1.chill_pid.max);
-    control_F1.chill_pid.pid.SetMode(1);
+    control_F1.chill_pid.pid.SetMode(PID::AUTOMATIC);
     control_F1.chill_pid.pid.SetSampleTime(control_F1.chill_pid.window);
 
     control_F1.heat_pid.pid.Setup(&control_F1.tempF, &control_F1.heat_pid.output, &control_F1.target,
-                                 control_F1.heat_pid.Kp, control_F1.heat_pid.Ki, control_F1.heat_pid.Kd, 0, 1);
+                                 control_F1.heat_pid.Kp, control_F1.heat_pid.Ki, control_F1.heat_pid.Kd,
+                                 PID::P_ON_E, PID::DIRECT);
     control_F1.heat_pid.pid.SetOutputLimits(0, control_F1.heat_pid.max);
-    control_F1.heat_pid.pid.SetMode(1);
+    control_F1.heat_pid.pid.SetMode(PID::AUTOMATIC);
     control_F1.heat_pid.pid.SetSampleTime(control_F1.heat_pid.window);
 
     control_F2.chill_pid.pid.Setup(&control_F2.tempF, &control_F2.chill_pid.output, &control_F2.target,
-                                  control_F2.chill_pid.Kp, control_F2.chill_pid.Ki, control_F2.chill_pid.Kd, 0, 1);
+                                  control_F2.chill_pid.Kp, control_F2.chill_pid.Ki, control_F2.chill_pid.Kd,
+                                  PID::P_ON_E, PID::REVERSE);
     control_F2.chill_pid.pid.SetOutputLimits(0, control_F2.chill_pid.max);
-    control_F2.chill_pid.pid.SetMode(1);
+    control_F2.chill_pid.pid.SetMode(PID::AUTOMATIC);
     control_F2.chill_pid.pid.SetSampleTime(control_F2.chill_pid.window);
 
     control_F2.heat_pid.pid.Setup(&control_F2.tempF, &control_F2.heat_pid.output, &control_F2.target,
-                                 control_F2.heat_pid.Kp, control_F2.heat_pid.Ki, control_F2.heat_pid.Kd, 0, 1);
+                                 control_F2.heat_pid.Kp, control_F2.heat_pid.Ki, control_F2.heat_pid.Kd,
+                                 PID::P_ON_E, PID::DIRECT);
     control_F2.heat_pid.pid.SetOutputLimits(0, control_F2.heat_pid.max);
-    control_F2.heat_pid.pid.SetMode(1);
+    control_F2.heat_pid.pid.SetMode(PID::AUTOMATIC);
     control_F2.heat_pid.pid.SetSampleTime(control_F2.heat_pid.window);
 
     control_Heater.heat_pid.pid.Setup(&control_Heater.tempF, &control_Heater.heat_pid.output, &control_Heater.target,
-                                     control_Heater.heat_pid.Kp, control_Heater.heat_pid.Ki, control_Heater.heat_pid.Kd, 1, 0);
+                                     control_Heater.heat_pid.Kp, control_Heater.heat_pid.Ki, control_Heater.heat_pid.Kd,
+                                     PID::P_ON_E, PID::DIRECT);
     control_Heater.heat_pid.pid.SetOutputLimits(0, control_Heater.heat_pid.max);
-    control_Heater.heat_pid.pid.SetMode(1);
+    control_Heater.heat_pid.pid.SetMode(PID::AUTOMATIC);
     control_Heater.heat_pid.pid.SetSampleTime(control_Heater.heat_pid.window);
 }
 
@@ -930,9 +953,13 @@ void update_control(TemperatureControl *control)
     char buffer[50];
     char actbuf[5];
     char lastactbuf[5];
+    char mbuf[5];
     action_as_string(control->action, actbuf, 5);
     action_as_string(control->last_action, lastactbuf, 5);
-    snprintf(buffer, 50, "%s: e:%3.2f; a:%s; l:%s", control->name,
+    mode_as_string(control->mode, mbuf, 5);
+    snprintf(buffer, 50, "%s(%s): e:%3.2f; a:%s; l:%s",
+        control->name,
+        mbuf,
         control->error,
         actbuf,
         lastactbuf);
@@ -947,7 +974,7 @@ void update_chiller()
 
     bool state = FALSE;
 
-    if (chiller.mode == AUTO_MODE_AUTO)
+    if ((chiller.mode & AUTO_MODE_AUTO) > 0)
     {
         // set up chiller target
         //  gather fermenter target temperatures
@@ -957,7 +984,7 @@ void update_chiller()
         float f_target = 100;
 
         // 'loop' over fermenters and find lowest target, and biggest differential
-        if (fermenters[F_FERMENTER_1].control->mode != AUTO_MODE_OFF)
+        if ((fermenters[F_FERMENTER_1].control->mode & AUTO_MODE_CHILL) > 0)
         {
             if (fermenters[F_FERMENTER_1].control->target < f_target)
             {
@@ -969,7 +996,7 @@ void update_chiller()
                 f_diff = fermenters[F_FERMENTER_1].control->tempF - fermenters[F_FERMENTER_1].control->target;
             }
         }
-        if (fermenters[F_FERMENTER_2].control->mode != AUTO_MODE_OFF)
+        if ((fermenters[F_FERMENTER_2].control->mode & AUTO_MODE_CHILL) > 0)
         {
             if (fermenters[F_FERMENTER_2].control->target < f_target)
             {
@@ -1023,7 +1050,7 @@ void update_chiller()
             state = FALSE;
         }
     }
-    else if (chiller.mode == AUTO_MODE_ON)
+    else if ((chiller.mode & AUTO_MODE_ON) > 0)
     {
         state = TRUE;
     }
@@ -1086,7 +1113,7 @@ void update_chiller()
             ppublish("Turning Chiller ON");
             actuate(&chiller.fan, TRUE);
 
-            chiller.heater->mode = AUTO_MODE_PID;
+            chiller.heater->mode = AUTO_MODE_PID & AUTO_MODE_HEAT;
             chiller.heater->target = chiller.control_set_temperature + chiller.control_temperature_offset_high;
         }
 
@@ -1532,6 +1559,7 @@ void button_onLongClick(Button *button)
     //Log.trace("%s was clicked.", button->name);
 }
 
+//TODO: fix button handling
 void button_onClick(Button *button)
 {
     char buffer[10];
@@ -1649,19 +1677,37 @@ BLYNK_WRITE(V0)
     }
 }
 
-int menu_as_mode(int menu)
+byte mode_as_menu(byte mode)
+{
+    switch(mode)
+    {
+        case CONTROL_MODE_OFF: return MENU_OFF;
+        case CONTROL_MODE_ON_CHILL: return MENU_ON_CHILL;
+        case CONTROL_MODE_ON_HEAT: return MENU_ON_HEAT;
+        case CONTROL_MODE_AUTO: return MENU_AUTO;
+        case CONTROL_MODE_PID: return MENU_PID;
+        case CONTROL_MODE_PID_CHILL: return MENU_PID_CHILL;
+        case CONTROL_MODE_PID_HEAT: return MENU_PID_HEAT;
+        case CONTROL_MODE_AUTO_CHILL: return MENU_AUTO_CHILL;
+        case CONTROL_MODE_AUTO_HEAT: return MENU_AUTO_HEAT;
+        default: return MENU_OFF;
+    }
+}
+
+byte menu_as_mode(byte menu)
 {
     switch (menu)
     {
-        case MENU_OFF: return MENU_OFF_MODE;
-        case MENU_ON: return MENU_ON_MODE;
-        case MENU_PID: return MENU_PID_MODE;
-        case MENU_AUTO: return MENU_AUTO_MODE;
-        case MENU_PHEAT: return MENU_PHEAT_MODE;
-        case MENU_PCHILL: return MENU_PCHILL_MODE;
-        case MENU_AHEAT: return MENU_AHEAT_MODE;
-        case MENU_ACHILL: return MENU_ACHILL_MODE;
-        default: return MENU_OFF_MODE;
+        case MENU_OFF: return CONTROL_MODE_OFF;
+        case MENU_ON_CHILL: return CONTROL_MODE_ON_CHILL;
+        case MENU_ON_HEAT: return CONTROL_MODE_ON_HEAT;
+        case MENU_PID: return CONTROL_MODE_PID;
+        case MENU_AUTO: return CONTROL_MODE_AUTO;
+        case MENU_PID_CHILL: return CONTROL_MODE_PID_CHILL;
+        case MENU_PID_HEAT: return CONTROL_MODE_PID_HEAT;
+        case MENU_AUTO_CHILL: return CONTROL_MODE_AUTO_CHILL;
+        case MENU_AUTO_HEAT: return CONTROL_MODE_AUTO_HEAT;
+        default: return CONTROL_MODE_OFF;
     }
 }
 
@@ -1701,13 +1747,13 @@ BLYNK_WRITE(V13)
 {
     int y = param.asInt();
     char buf[5];
-    chiller.mode = y;
-    mode_as_string(y, buf, 5);
+    chiller.mode = menu_as_mode(y);
+    mode_as_string(chiller.mode, buf, 5);
     Log.info("blynk -> Setting %s Mode to %s", chiller.name, buf);
     ppublish("blynk -> Setting %s Mode to %s", chiller.name, buf);
     update_chiller();
 }
-BLYNK_WRITE(V25)
+BLYNK_WRITE(V30)
 {
     rescanOWN = true;
     Log.info("blynk -> scheduling OWN rescan");

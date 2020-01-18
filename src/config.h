@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "dh3"
+#define APP_VERSION "dh5"
 
 // A/C Thermostat Heater pin
 #define OWNPIN D6
@@ -16,23 +16,30 @@
 #define AUTO_MODE_CHILL 16
 #define AUTO_MODE_HEAT 32
 
-#define MENU_ON 1
-#define MENU_OFF 2
+#define MENU_OFF 1
+#define MENU_AUTO 2
 #define MENU_PID 3
-#define MENU_AUTO 4
-#define MENU_AHEAT 5
-#define MENU_ACHILL 6
-#define MENU_PHEAT 7
-#define MENU_PCHILL 8
+#define MENU_ON_CHILL 4
+#define MENU_ON_HEAT 5
+#define MENU_AUTO_CHILL 6
+#define MENU_AUTO_HEAT 7
+#define MENU_PID_CHILL 8
+#define MENU_PID_HEAT 9
 
-#define MENU_ON_MODE AUTO_MODE_ON
-#define MENU_OFF_MODE AUTO_MODE_OFF
-#define MENU_PID_MODE AUTO_MODE_PID        // PID control
-#define MENU_AUTO_MODE AUTO_MODE_AUTO      // Dumb auto : setpoint, threshold min/max
-#define MENU_PCHILL_MODE AUTO_MODE_PID | AUTO_MODE_CHILL   // PID - Chiller only
-#define MENU_PHEAT_MODE AUTO_MODE_PID | AUTO_MODE_HEAT     // PID - Heater only
-#define MENU_ACHILL_MODE AUTO_MODE_AUTO | AUTO_MODE_CHILL   // Auto - Chiller only
-#define MENU_AHEAT_MODE AUTO_MODE_AUTO | AUTO_MODE_HEAT     // Auto - Heater only
+#define CONTROL_MODE_OFF AUTO_MODE_OFF
+#define CONTROL_MODE_ON_CHILL   AUTO_MODE_ON | AUTO_MODE_CHILL
+#define CONTROL_MODE_ON_HEAT    AUTO_MODE_ON | AUTO_MODE_HEAT
+
+// PID control
+#define CONTROL_MODE_PID        AUTO_MODE_PID | AUTO_MODE_CHILL | AUTO_MODE_HEAT
+#define CONTROL_MODE_PID_CHILL  AUTO_MODE_PID | AUTO_MODE_CHILL
+#define CONTROL_MODE_PID_HEAT   AUTO_MODE_PID | AUTO_MODE_HEAT
+
+// Dumb auto : setpoint, threshold min/max
+#define CONTROL_MODE_AUTO       AUTO_MODE_AUTO | AUTO_MODE_CHILL | AUTO_MODE_HEAT
+#define CONTROL_MODE_AUTO_CHILL AUTO_MODE_AUTO | AUTO_MODE_CHILL
+#define CONTROL_MODE_AUTO_HEAT  AUTO_MODE_AUTO | AUTO_MODE_HEAT
+
 
 #define CONTROL_HIGH_DIFFERENTIAL 10  // error > DIFFERENTIAL -> high differential
 #define ACTION_NONE 1
@@ -113,12 +120,17 @@ struct TemperatureControl
 
     DSTempSensor *dstempsensor;
     Thermistor *thermistor;
-    byte mode; // 1 - ON ; 2 - OFF ; 3 - AUTO
+    byte mode;  // see CONTROL_ defines
+    uint8_t blynkMenuPin;
+    uint8_t blynkChillOutputPin;
+    uint8_t blynkHeatOutputPin;
+    uint8_t blynkCompositeOutputPin;
+    int8_t blynkLastComposite;
     Actuator heater;
     Actuator chiller;
 
-    uint8_t action; // 1 none, 2 - chill, 4 - heat
-    uint8_t last_action; // 1 none, 2 - chill, 4 - heat
+    uint8_t action; // see ACTION_ defines
+    uint8_t last_action;
 
     double tempF;
     double target;
