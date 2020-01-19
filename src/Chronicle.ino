@@ -1059,7 +1059,7 @@ void update_chiller()
     else
     {
         //LogChiller.trace(" nothing to do!");
-        ppublish(" nothing to do!");
+        //ppublish(" nothing to do!");
     }
 }
 
@@ -1376,7 +1376,10 @@ void read_ds_temperatures()
             }
         }
     }
-    ppublish("Read %d DS temps out of %d", read_count, present_count);
+    if (DS_SENSOR_COUNT != read_count || DS_SENSOR_COUNT != present_count )
+    {
+        ppublish("Read %d DS temps out of %d, expected %d", read_count, present_count, DS_SENSOR_COUNT);
+    }
     // if there are none found, don't keep hammering the network
     if (present_count == 0)
     {
