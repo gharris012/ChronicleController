@@ -1,7 +1,7 @@
 #ifndef config_h
 #define config_h
 
-#define APP_VERSION "r2.1.3"
+#define APP_VERSION "r2.1.4"
 
 // A/C Thermostat Heater pin
 #define OWNPIN D6
