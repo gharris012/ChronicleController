@@ -1376,6 +1376,7 @@ void read_ds_temperatures()
             }
         }
     }
+    ppublish("Read %d DS temps out of %d", read_count, present_count);
     // if there are none found, don't keep hammering the network
     if (present_count == 0)
     {
@@ -1384,7 +1385,6 @@ void read_ds_temperatures()
     }
     else if (!done_converting)
     {
-        ppublish("Read %d DS temps out of %d", read_count, present_count);
         timer.setTimeout(DS_TEMP_SENSOR_CONVERT_DURATION, read_ds_temperatures);
     }
 }
