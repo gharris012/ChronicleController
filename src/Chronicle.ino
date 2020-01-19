@@ -1037,13 +1037,13 @@ void update_chiller()
     {
         unsigned long int next_available_time = 0;
         // on and on_time > min_on_time
-        if (chiller.state == TRUE && (( millis() - chiller.timer_last ) >= chiller.min_on_time))
+        if (chiller.state == TRUE && (( millis() - chiller.timer_last ) <= chiller.min_on_time))
         {
             next_available_time = chiller.timer_last + chiller.min_on_time;
             state = TRUE;
         }
         // off and off_time > min_off_time
-        if (chiller.state == FALSE && (( millis() - chiller.timer_last ) >= chiller.min_off_time))
+        if (chiller.state == FALSE && (( millis() - chiller.timer_last ) <= chiller.min_off_time))
         {
             next_available_time = chiller.timer_last + chiller.min_off_time;
             state = FALSE;
