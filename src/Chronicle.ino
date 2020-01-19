@@ -136,29 +136,27 @@ TemperatureControl control_F2 = {
 
 TemperatureControl control_Heater = {
     "H-Ctrl",
-
     NULL,                       // ds temp sensor
     &thermistors[THERM_HEATER], // thermistor
     AUTO_MODE_OFF,              // mode
     // blynk pins
-    0,
-    0,
-    0,
-    0,
-    0,
+    0,  // menu
+    0,  // chill output
+    0,  // heat output
+    0,  // composite output
+    0,  // last composite
     {"H-Act", TRUE, FALSE, 8, NULL, FALSE, 0, FALSE, 0}, // actuator - mcp
     {},
-
     ACTION_NONE, // action
     ACTION_NONE, // last_action
-
     INVALID_TEMPERATURE, // tempF
-    65,
-    0,
-    0,
+    65, // target
+    0,  // error
+    0,  // hysterisis
 
-    {PID(), 100, 0.15f, 1000, 0, 0, 0, FALSE, 1, 1000, 1000, 0, 0},
-    {}};
+    {PID(), 100, 0.15f, 1000, 0, 0, 0, FALSE, 1, 1000, 1000, 0, 0}, // heat-pid
+    {}
+};
 
 const byte FERMENTER_COUNT = 2;
 const byte F_FERMENTER_1 = 0;
@@ -982,7 +980,7 @@ void update_chiller()
 
         if (f_diff > CHILLER_HIGH_DIFF_THRESHOLD)
         {
-            LogChiller.trace(" high differential");
+            //LogChiller.trace(" high differential");
             ppublish("Chiller High Differential: %2.0f", f_diff);
             offset = chiller.high_target_offset;
             threshold_high = chiller.high_threshold_high;
@@ -990,7 +988,7 @@ void update_chiller()
         }
         else
         {
-            LogChiller.trace(" normal differential");
+            //LogChiller.trace(" normal differential");
             ppublish("Chiller Normal Differential: %2.0f", f_diff);
             offset = chiller.normal_target_offset;
             threshold_high = chiller.normal_threshold_high;
@@ -1000,9 +998,9 @@ void update_chiller()
         // apply offset, then constrain between min and default
         chiller.target = constrain(f_target - offset, chiller.min_temperature, CHILLER_DEFAULT_TARGET);
 
-        LogChiller.trace(" current: %2f ; target: %2d", chiller.dstempsensor->tempF, chiller.target);
-        LogChiller.trace(" threshold high: %d ; low: %d", threshold_high, threshold_low);
-        LogChiller.trace(" on temp: %2d ; off temp: %2d", chiller.target + threshold_high, chiller.target - threshold_low);
+        //LogChiller.trace(" current: %2f ; target: %2d", chiller.dstempsensor->tempF, chiller.target);
+        //LogChiller.trace(" threshold high: %d ; low: %d", threshold_high, threshold_low);
+        //LogChiller.trace(" on temp: %2d ; off temp: %2d", chiller.target + threshold_high, chiller.target - threshold_low);
         ppublish("Chiller Target: %d < %d < %d, current: %2f", chiller.target - threshold_low, (int)chiller.target, chiller.target + threshold_high, chiller.dstempsensor->tempF);
 
         // if we're off, kick on when we get over target+threshold
@@ -1027,10 +1025,10 @@ void update_chiller()
     }
     else
     {
-        LogChiller.warn(" Unknown mode requested: %d", chiller.mode);
+        //LogChiller.warn(" Unknown mode requested: %d", chiller.mode);
         ppublish(" Unknown mode requested: %d", chiller.mode);
     }
-    LogChiller.trace(" prefilter state: %d", state);
+    //LogChiller.trace(" prefilter state: %d", state);
     ppublish("Chiller pre-filter state: %d", state);
 
     // Filter Chiller logic: have we been on or off long enough?
@@ -1053,7 +1051,7 @@ void update_chiller()
 
         if (chiller.state == state)
         {
-            LogChiller.warn(" overriding due to min on/off time: %d ; next time: %ld", chiller.state, next_available_time);
+            //LogChiller.warn(" overriding due to min on/off time: %d ; next time: %ld", chiller.state, next_available_time);
             ppublish("Chiller override due to min on/off time: %d ; next time: %ld", chiller.state, next_available_time);
         }
     }
@@ -1063,33 +1061,33 @@ void update_chiller()
     if (chiller.dstempsensor->tempF != INVALID_TEMPERATURE && chiller.dstempsensor->tempF <= chiller.min_temperature &&
         (state == TRUE || chiller.state == TRUE))
     {
-        LogChiller.warn(" temp too low, shutting down");
+        //LogChiller.warn(" temp too low, shutting down");
         ppublish("chiller: temp too low, shutting down");
         state = FALSE;
     }
 
     // if we decide the A/C should be on, turn on the heater PID
-    LogChiller.trace(" chiller state: %d ; timer_last: %ld", chiller.state, chiller.timer_last);
+    //LogChiller.trace(" chiller state: %d ; timer_last: %ld", chiller.state, chiller.timer_last);
     ppublish(" chiller state: %d ; timer_last: %ld", chiller.state, chiller.timer_last);
     if (chiller.state != state || (chiller.state == FALSE && chiller.timer_last == 0))
     {
-        LogChiller.trace(" updating chiller state");
+        //LogChiller.trace(" updating chiller state");
         ppublish(" updating chiller state");
         chiller.state = state;
         chiller.timer_last = millis();
         if (state)
         {
-            LogChiller.info(" turning Chiller ON");
+            //LogChiller.info(" turning Chiller ON");
             ppublish("Turning Chiller ON");
             actuate(&chiller.fan, TRUE);
 
-            chiller.heater->mode = AUTO_MODE_PID & AUTO_MODE_HEAT;
+            chiller.heater->mode = AUTO_MODE_PID | AUTO_MODE_HEAT;
             chiller.heater->target = chiller.control_set_temperature + chiller.control_temperature_offset_high;
         }
 
         else
         {
-            LogChiller.info(" turning Chiller OFF");
+            //LogChiller.info(" turning Chiller OFF");
             ppublish("Turning Chiller OFF");
             chiller.heater->mode = AUTO_MODE_OFF;
             timer.setTimeout(chiller_check_heater_delay, chiller_check_heater);
@@ -1097,7 +1095,7 @@ void update_chiller()
     }
     else
     {
-        LogChiller.trace(" nothing to do!");
+        //LogChiller.trace(" nothing to do!");
         ppublish(" nothing to do!");
     }
 }
